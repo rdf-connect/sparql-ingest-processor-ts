@@ -1,0 +1,36 @@
+{
+  "name": "sparql-ingest-processor-ts",
+  "version": "0.0.1",
+  "author": "Julián Rojas",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
+    "test": "bun test",
+    "watch": "tsc -w"
+  },
+  "files": [
+    "lib/**/*",
+    "./processors.ttl"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/julianrojas87/sparql-ingest-processor-ts.git"
+  },
+  "dependencies": {
+    "@treecg/types": "^0.4.5",
+    "n3": "^1.17.2"
+  },
+  "devDependencies": {
+    "@ajuvercr/js-runner": "0.1.14",
+    "@jest/globals": "^29.7.0",
+    "@rdfjs/types": "^1.1.0",
+    "@types/bun": "latest",
+    "@types/n3": "^1.16.4",
+    "memory-level": "^1.0.0",
+    "quadstore": "^13.0.1",
+    "quadstore-comunica": "^4.0.1",
+    "typescript": "^5.3.3"
+  }
+}

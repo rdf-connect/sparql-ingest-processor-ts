@@ -1,0 +1,111 @@
+@prefix js: <https://w3id.org/conn/js#>.
+@prefix fno: <https://w3id.org/function/ontology#>.
+@prefix fnom: <https://w3id.org/function/vocabulary/mapping#>.
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#>.
+@prefix : <https://w3id.org/conn#>.
+@prefix sh: <http://www.w3.org/ns/shacl#>.
+@prefix dc: <http://purl.org/dc/terms/>.
+
+js:SPARQLIngest a js:JsProcess;
+  js:file <./lib/SPARQLIngest.js>;
+  js:function "sparqlIngest";
+  js:location <./>;
+  js:mapping [
+    a fno:Mapping;
+    fno:parameterMapping [
+      a fnom:PositionParameterMapping;
+      fnom:functionParameter "memberStream";
+      fnom:implementationParameterPosition "0"^^xsd:integer;
+    ], [
+      a fnom:PositionParameterMapping;
+      fnom:functionParameter "ingestConfig";
+      fnom:implementationParameterPosition "1"^^xsd:integer;
+    ], [
+      a fnom:PositionParameterMapping;
+      fnom:functionParameter "sparqlWriter";
+      fnom:implementationParameterPosition "2"^^xsd:integer;
+    ];
+].
+
+[ ] a sh:NodeShape;
+  sh:targetClass js:SPARQLIngest;
+  sh:property [
+    sh:path js:memberStream;
+    sh:name "memberStream";
+    sh:class :ReaderChannel;
+    sh:minCount 1;
+    sh:maxCount 1;
+  ], [
+    sh:path js:ingestConfig;
+    sh:name "ingestConfig";
+    sh:class js:IngestConfig;
+    sh:minCount 1;
+    sh:maxCount 1;
+  ], [
+    sh:path js:sparqlWriter;
+    sh:name "sparqlWriter";
+    sh:class :WriterChannel;
+    sh:minCount 1;
+    sh:maxCount 1;
+  ].
+
+[ ] a sh:NodeShape;
+  sh:targetClass js:IngestConfig;
+  sh:property [
+    sh:path js:memberIsGraph;
+    sh:datatype xsd:boolean;
+    sh:name "memberIsGraph";
+    sh:maxCount 1;
+    sh:minCount 1;
+  ], [
+    sh:path js:memberShape;
+    sh:datatype xsd:string;
+    sh:name "memberShapes";
+    sh:minCount 0;
+  ], [
+    sh:path js:changeSemantics;
+    sh:class js:ChangeSemantics;
+    sh:name "changeSemantics";
+    sh:maxCount 1;
+    sh:minCount 0;
+  ], [
+    sh:path js:targetNamedGraph;
+    sh:datatype xsd:string;
+    sh:name "targetNamedGraph";
+    sh:maxCount 1;
+    sh:minCount 0;
+  ], [
+    sh:path js:transactionIdPath;
+    sh:datatype xsd:string;
+    sh:name "transactionIdPath";
+    sh:maxCount 1;
+    sh:minCount 0;
+  ].
+
+[ ] a sh:NodeShape;
+  sh:targetClass js:ChangeSemantics;
+  sh:property [
+    sh:path js:changeTypePath;
+    sh:datatype xsd:string;
+    sh:name "changeTypePath";
+    sh:maxCount 1;
+    sh:minCount 1;
+  ], [
+    sh:path js:createValue;
+    sh:datatype xsd:string;
+    sh:name "createValue";
+    sh:maxCount 1;
+    sh:minCount 1;
+  ], [
+    sh:path js:updateValue;
+    sh:datatype xsd:string;
+    sh:name "updateValue";
+    sh:maxCount 1;
+    sh:minCount 1;
+  ], [
+    sh:path js:deleteValue;
+    sh:datatype xsd:string;
+    sh:name "deleteValue";
+    sh:maxCount 1;
+    sh:minCount 1;
+  ].

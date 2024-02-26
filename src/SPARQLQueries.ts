@@ -1,0 +1,163 @@
+import { Quad_Object } from "@rdfjs/types";
+import { RDF, SHACL } from "@treecg/types";
+import { Writer as N3Writer, Store, Parser } from "n3"
+
+export const CREATE = (store: Store, namedGraph?: string): string => {
+    const content = new N3Writer().quadsToString(store.getQuads(null, null, null, null));
+    return `
+        INSERT DATA {
+            ${namedGraph ? `GRAPH <${namedGraph}> {${content}}` : `${content}`} 
+        }
+    `;
+};
+
+export const UPDATE = (store: Store, namedGraph?: string): string => {
+    const formattedQuery = formatQuery(store);
+    const content = new N3Writer().quadsToString(store.getQuads(null, null, null, null));
+    return `
+        ${namedGraph ? `WITH <${namedGraph}>` : ""}
+        DELETE { 
+            ${formattedQuery} 
+        }
+        INSERT { 
+            ${content} 
+        }
+        WHERE { 
+            ${formattedQuery} 
+        }
+    `;
+};
+
+export const DELETE = (store: Store, memberIRI: string, memberShapes?: string[], namedGraph?: string): string => {
+    const formattedQuery = formatQuery(store, memberIRI, memberShapes);
+
+    return `
+        ${namedGraph ? `WITH <${namedGraph}>` : ""}
+        DELETE {
+            ${formattedQuery.length > 1 ? formattedQuery[1] : formattedQuery[0]}
+        } WHERE { 
+            ${formattedQuery[0]}
+        }
+    `;
+}
+
+function formatQuery(memberStore: Store, memberIRI?: string, memberShapes?: string[]): string[] {
+    const subjectSet = new Set<string>();
+    const queryBuilder: string[] = [];
+    const formattedQueries: string[] = [];
+    let i = 0;
+
+    // Check if one or more member shapes were given. 
+    // If not, we assume that all properties of the member are present 
+    // and we use them to define its DELETE query pattern.
+    if (!memberShapes || memberShapes.length === 0) {
+        // Iterate over every BGP of the member to define a deletion pattern
+        for (const quad of memberStore.getQuads(null, null, null, null)) {
+            if (!subjectSet.has(quad.subject.value)) {
+                // Make sure every subject is processed only once
+                subjectSet.add(quad.subject.value);
+                if (quad.subject.termType === "NamedNode") {
+                    // Define a pattern that covers every property and value of named nodes
+                    queryBuilder.push(`<${quad.subject.value}> ?p_${i} ?o_${i}.`);
+                } else if (quad.subject.termType === "BlankNode") {
+                    // Define a pattern that covers the referencing BGP and every property and value of blank nodes
+                    const bnQ = memberStore.getQuads(null, null, quad.subject, null)[0];
+                    queryBuilder.push(`<${bnQ.subject.value}> <${bnQ.predicate.value}> ?bn_${i}.`);
+                    queryBuilder.push(`?bn_${i} ?p_${i} ?o${i}.`);
+                }
+                i++;
+            }
+        }
+        formattedQueries.push(queryBuilder.join("\n"))
+    } else {
+        // Create a shape index per target class
+        const shapeIndex = new Map<string, Store>();
+        memberShapes.forEach(msh => {
+            const shapeStore = new Store(new Parser().parse(msh));
+            shapeIndex.set(extractMainTargetClass(shapeStore).value, shapeStore);
+        });
+
+        // Add basic DELETE query pattern for this member
+        queryBuilder.push(`<${memberIRI}> ?p_${i} ?o_${i}.`);
+
+        // See if the member has a defined rdf:type so that we create a query pattern 
+        // for a specific shape, based on the sh:targetClass.
+        // Otherwise we have to include all shapes in the query pattern because we don't know
+        // exactly which is the shape of the received member.
+        const memberType = memberStore.getObjects(memberIRI!, RDF.type, null)[0];
+        if (memberType) {
+            i++;
+            const mshStore = shapeIndex.get(memberType.value);
+            const propShapes = mshStore!.getObjects(null, SHACL.property, null);
+
+            for (const propSh of propShapes) {
+                const pred = mshStore!.getObjects(propSh, SHACL.path, null)[0];
+                queryBuilder.push(`<${memberIRI}> <${pred.value}> ?subEnt_${i}.`);
+                queryBuilder.push(`?subEnt_${i} ?p_${i} ?o_${i}.`);
+                i++;
+            }
+            formattedQueries.push(queryBuilder.join("\n"));
+        } else {
+            // We have to define a different but related query pattern for the delete clause without OPTIONAL
+            const deleteQueryBuilder: string[] = [];
+            deleteQueryBuilder.push(`<${memberIRI}> ?p_${i} ?o_${i}.`);
+            i++;
+            
+            // Iterate over every declared member shape
+            shapeIndex.forEach(mshStore => {
+                const propShapes = mshStore.getObjects(null, SHACL.property, null);
+                queryBuilder.push(" OPTIONAL { ");
+                for (const propSh of propShapes) {
+                    const pred = mshStore.getObjects(propSh, SHACL.path, null)[0];
+                    queryBuilder.push(`<${memberIRI}> <${pred.value}> ?subEnt_${i}.`);
+                    deleteQueryBuilder.push(`<${memberIRI}> <${pred.value}> ?subEnt_${i}.`);
+                    queryBuilder.push(`?subEnt_${i} ?p_${i} ?o_${i}.`);
+                    deleteQueryBuilder.push(`?subEnt_${i} ?p_${i} ?o_${i}.`);
+                    i++;
+                }
+                queryBuilder.push(" }");
+            });
+
+            formattedQueries.push(queryBuilder.join("\n"));
+            formattedQueries.push(deleteQueryBuilder.join("\n"));
+        }
+    }
+
+    return formattedQueries;
+}
+
+// Find the main target class of a give Shape Graph.
+// We determine this by assuming that the main node shape
+// is not referenced by any other shape description.
+// If more than one is found an exception is thrown.
+function extractMainTargetClass(store: Store): Quad_Object {
+    const nodeShapes = store.getSubjects(RDF.type, SHACL.NodeShape, null);
+    let mainNodeShape = null;
+
+    if (nodeShapes && nodeShapes.length > 0) {
+        for (const ns of nodeShapes) {
+            const isNotReferenced = store.getSubjects(null, ns, null).length === 0;
+
+            if (isNotReferenced) {
+                if (!mainNodeShape) {
+                    mainNodeShape = ns;
+                } else {
+                    throw new Error("There are multiple main node shapes in a given shape."
+                        + " Unrelated shapes must be given as separate member shapes");
+                }
+            }
+        }
+        if (mainNodeShape) {
+            const tcq = store.getObjects(mainNodeShape, SHACL.targetClass, null)[0];
+            if (tcq) {
+                return tcq;
+            } else {
+                throw new Error("No target class found in main SHACL Node Shapes");
+            }
+        } else {
+            throw new Error("No main SHACL Node Shapes found in given member shape");
+        }
+    } else {
+        throw new Error("No SHACL Node Shapes found in given member shape");
+    }
+}
