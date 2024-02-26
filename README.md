@@ -1,6 +1,6 @@
 # sparql-ingest-processor-ts
 
-[![Bun CI](https://github.com/julianrojas87/xml-utils-processors-ts/actions/workflows/build-test.yml/badge.svg)](https://github.com/julianrojas87/xml-utils-processors-ts/actions/workflows/build-test.yml) [![npm](https://img.shields.io/npm/v/xml-utils-processors-ts.svg?style=popout)](https://npmjs.com/package/xml-utils-processors-ts)
+[![Bun CI](https://github.com/julianrojas87/sparql-ingest-processor-ts/actions/workflows/build-test.yml/badge.svg)](https://github.com/julianrojas87/sparql-ingest-processor-ts/actions/workflows/build-test.yml) [![npm](https://img.shields.io/npm/v/sparql-ingest-processor-ts.svg?style=popout)](https://npmjs.com/package/sparql-ingest-processor-ts)
 
 Typescript [Connector Architecture](https://the-connector-architecture.github.io/site/docs/1_Home) processor for producing the corresponding SPARQL Update queries that write a stream of [SDS records](https://treecg.github.io/SmartDataStreams-Spec/) into a SPARQL triple store. Currently this repository exposes one function:
 
