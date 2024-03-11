@@ -40,7 +40,8 @@ describe("Tests for SPARQL ingest processor", async () => {
                     js:transactionConfig [
                         js:transactionIdPath "http://ex.org/transactionId";
                         js:transactionEndPath "http://ex.org/transactionEnd"
-                    ]
+                    ];
+                    js:graphStoreUrl "http://ex.org/myGraphStore"
                 ];
                 js:sparqlWriter <jw>.
         `;
@@ -73,6 +74,7 @@ describe("Tests for SPARQL ingest processor", async () => {
         expect(ingestConfig.targetNamedGraph).toBe("http://ex.org/myGraph");
         expect(ingestConfig.transactionConfig.transactionIdPath).toBe("http://ex.org/transactionId");
         expect(ingestConfig.transactionConfig.transactionEndPath).toBe("http://ex.org/transactionEnd");
+        expect(ingestConfig.graphStoreUrl).toBe("http://ex.org/myGraphStore");
         testWriter(sparqlWriter);
 
         await checkProc(env.file, env.func);

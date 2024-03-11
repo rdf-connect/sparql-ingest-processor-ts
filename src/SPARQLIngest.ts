@@ -3,6 +3,7 @@ import { SDS } from "@treecg/types";
 import { Store, Parser, DataFactory } from "n3";
 import { CREATE, UPDATE, DELETE } from "./SPARQLQueries";
 import { Quad_Subject, Term } from "@rdfjs/types";
+import { doSPARQLRequest } from "./Utils";
 
 const { quad, namedNode } = DataFactory;
 
@@ -24,6 +25,7 @@ export type IngestConfig = {
     changeSemantics?: ChangeSemantics;
     targetNamedGraph?: string;
     transactionConfig?: TransactionConfig;
+    graphStoreUrl?: string;
 };
 
 export type TransactionMember = {
@@ -35,7 +37,7 @@ export type TransactionMember = {
 export async function sparqlIngest(
     memberStream: Stream<string>,
     config: IngestConfig,
-    sparqlWriter: Writer<string>
+    sparqlWriter?: Writer<string>
 ) {
     let transactionMembers: TransactionMember[] = [];
 
@@ -146,14 +148,24 @@ export async function sparqlIngest(
 
             // Execute the update query
             if (query) {
-                await sparqlWriter.push(query);
-            }
+                const outputPromises = [];
+                if (sparqlWriter) {
+                    outputPromises.push(sparqlWriter.push(query));
+                }
+                if (config.graphStoreUrl) {
+                    outputPromises.push(doSPARQLRequest(query, config.graphStoreUrl));
+                }
+
+                await Promise.all(outputPromises);
+            } 
         } else {
             throw new Error(`[sparqlIngest] No member IRI found in received RDF data: \n${rawQuads}`);
         }
     });
 
-    memberStream.on("end", async () => await sparqlWriter.end());
+    if (sparqlWriter) {
+        memberStream.on("end", async () => await sparqlWriter.end());
+    }
 }
 
 function verifyTransaction(stores: Store[], transactionIdPath: string, transactionId: Term): void {

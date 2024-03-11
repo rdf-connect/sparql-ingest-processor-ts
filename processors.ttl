@@ -80,6 +80,12 @@ js:SPARQLIngest a js:JsProcess;
     sh:name "transactionConfig";
     sh:maxCount 1;
     sh:minCount 0;
+  ], [
+    sh:path js:graphStoreUrl;
+    sh:datatype xsd:string;
+    sh:name "graphStoreUrl";
+    sh:maxCount 1;
+    sh:minCount 0;
   ].
 
 [ ] a sh:NodeShape;
