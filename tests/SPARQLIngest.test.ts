@@ -348,7 +348,11 @@ describe("Functional tests for the sparqlIngest Connector Architecture function"
                 updateValue: "https://example.org/ns#Update",
                 deleteValue: "https://example.org/ns#Delete",
             },
-            memberShapes: [ENTITY_SHAPE]
+            memberShapes: [ENTITY_SHAPE],
+            transactionConfig: {
+                transactionIdPath: "https://w3id.org/ldes#transactionId",
+                transactionEndPath: "https://w3id.org/ldes#isLastOfTransaction"
+            }
         };
 
         // Add some data to the triple store first (ex:Entity_0, ex:Entity_1, ex:Entity_2 and ex:Entity_3)

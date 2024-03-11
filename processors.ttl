@@ -24,7 +24,7 @@ js:SPARQLIngest a js:JsProcess;
       a fnom:PositionParameterMapping;
       fnom:functionParameter "sparqlWriter";
       fnom:implementationParameterPosition "2"^^xsd:integer;
-    ];
+    ]
 ].
 
 [ ] a sh:NodeShape;
@@ -75,9 +75,9 @@ js:SPARQLIngest a js:JsProcess;
     sh:maxCount 1;
     sh:minCount 0;
   ], [
-    sh:path js:transactionIdPath;
-    sh:datatype xsd:string;
-    sh:name "transactionIdPath";
+    sh:path js:transactionConfig;
+    sh:class js:TransactionConfig;
+    sh:name "transactionConfig";
     sh:maxCount 1;
     sh:minCount 0;
   ].
@@ -106,6 +106,22 @@ js:SPARQLIngest a js:JsProcess;
     sh:path js:deleteValue;
     sh:datatype xsd:string;
     sh:name "deleteValue";
+    sh:maxCount 1;
+    sh:minCount 1;
+  ].
+
+  [ ] a sh:NodeShape;
+  sh:targetClass js:TransactionConfig;
+  sh:property [
+    sh:path js:transactionIdPath;
+    sh:datatype xsd:string;
+    sh:name "transactionIdPath";
+    sh:maxCount 1;
+    sh:minCount 1;
+  ], [
+    sh:path js:transactionEndPath;
+    sh:datatype xsd:string;
+    sh:name "transactionEndPath";
     sh:maxCount 1;
     sh:minCount 1;
   ].

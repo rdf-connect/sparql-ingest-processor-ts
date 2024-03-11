@@ -37,7 +37,10 @@ describe("Tests for SPARQL ingest processor", async () => {
                         js:deleteValue "http://ex.org/Delete"
                     ];
                     js:targetNamedGraph "http://ex.org/myGraph";
-                    js:transactionIdPath "http://ex.org/trancationId"
+                    js:transactionConfig [
+                        js:transactionIdPath "http://ex.org/transactionId";
+                        js:transactionEndPath "http://ex.org/transactionEnd"
+                    ]
                 ];
                 js:sparqlWriter <jw>.
         `;
@@ -57,7 +60,7 @@ describe("Tests for SPARQL ingest processor", async () => {
         expect(argss.length).toBe(1);
         expect(argss[0].length).toBe(3);
 
-        const [[memberStream, ingestConfig, sparqlWriter]] = argss;
+        const [[memberStream, ingestConfig, sparqlWriter, transactionConfig]] = argss;
         
         testReader(memberStream);
         expect(ingestConfig.memberIsGraph).toBeFalsy();
@@ -68,7 +71,8 @@ describe("Tests for SPARQL ingest processor", async () => {
         expect(ingestConfig.changeSemantics.updateValue).toBe("http://ex.org/Update");
         expect(ingestConfig.changeSemantics.deleteValue).toBe("http://ex.org/Delete");
         expect(ingestConfig.targetNamedGraph).toBe("http://ex.org/myGraph");
-        expect(ingestConfig.transactionIdPath).toBe("http://ex.org/trancationId");
+        expect(ingestConfig.transactionConfig.transactionIdPath).toBe("http://ex.org/transactionId");
+        expect(ingestConfig.transactionConfig.transactionEndPath).toBe("http://ex.org/transactionEnd");
         testWriter(sparqlWriter);
 
         await checkProc(env.file, env.func);
