@@ -163,7 +163,7 @@ export async function sparqlIngest(
                 }
 
                 await Promise.all(outputPromises);
-                console.log(`[sparqlIngest] Executed ${queryType} on remote SPARQL server ${config.graphStoreUrl}`);
+                console.log(`[sparqlIngest] Executed ${queryType} on remote SPARQL server ${config.graphStoreUrl} - ${new Date().toISOString()}`);
             } 
         } else {
             throw new Error(`[sparqlIngest] No member IRI found in received RDF data: \n${rawQuads}`);
