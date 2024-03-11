@@ -537,7 +537,8 @@ function dataGenerator(
                         a ex:NestedEntity;
                         ex:nestedProp "some other value"
                     ];
-                    ex:prop3 ex:SomeNamedNode.
+                    ex:prop3 ex:SomeNamedNode;
+                    ex:propNum +30.
                 ` : "."}
         `;
     } else {

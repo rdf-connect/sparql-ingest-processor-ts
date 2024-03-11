@@ -3,7 +3,7 @@ import { SDS } from "@treecg/types";
 import { Store, Parser, DataFactory } from "n3";
 import { CREATE, UPDATE, DELETE } from "./SPARQLQueries";
 import { Quad_Subject, Term } from "@rdfjs/types";
-import { doSPARQLRequest } from "./Utils";
+import { doSPARQLRequest, sanitizeQuads } from "./Utils";
 
 const { quad, namedNode } = DataFactory;
 
@@ -123,6 +123,8 @@ export async function sparqlIngest(
                     const ctv = store.getQuads(null, config.changeSemantics!.changeTypePath, null, null)[0];
                     // Remove change type quad from store
                     store.removeQuad(ctv);
+                    // Sanitize quads to prevent issues on SPARQL queries
+                    sanitizeQuads(store);
                     // Assemble corresponding SPARQL UPDATE query
                     if (ctv.object.value === config.changeSemantics.createValue) {
                         query = CREATE(store, ng);
