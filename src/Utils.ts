@@ -3,8 +3,10 @@ import { Store, DataFactory as DF } from "n3";
 
 export function sanitizeQuads(store: Store): void {
     for (const q of store.getQuads(null, null, null, null)) {
-        if (q.object.termType === "Literal") {
-            if (/\+\d+/.test(q.object.value)) {
+        // There is an issue with triples like <a> <b> +30.
+        // Virtuoso doesn't accept the implicit integer type including the + sign.
+        if (q.object.termType === "Literal" && q.object.datatype.value === XSD.integer) {
+            if (/\+\d+/.test(q.object.value) && q.object.value.startsWith("+")) {
                 store.removeQuad(q);
                 store.addQuad(q.subject, q.predicate, DF.literal(q.object.value.substring(1), DF.namedNode(XSD.integer)), q.graph);
             }

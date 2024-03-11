@@ -110,6 +110,7 @@ export async function sparqlIngest(
 
             // Variable that will hold the full query to be executed
             let query;
+            let queryType;
 
             if (config.changeSemantics) {
                 if (transactionMembers.length > 0) {
@@ -128,10 +129,13 @@ export async function sparqlIngest(
                     // Assemble corresponding SPARQL UPDATE query
                     if (ctv.object.value === config.changeSemantics.createValue) {
                         query = CREATE(store, ng);
+                        queryType = "CREATE";
                     } else if (ctv.object.value === config.changeSemantics.updateValue) {
                         query = UPDATE(store, ng);
+                        queryType = "UPDATE";
                     } else if (ctv.object.value === config.changeSemantics.deleteValue) {
                         query = DELETE(store, [memberIRI.value], config.memberShapes, ng);
+                        queryType = "DELETE";
                     } else {
                         throw new Error(`[sparqlIngest] Unrecognized change type value: ${ctv.object.value}`);
                     }
@@ -159,6 +163,7 @@ export async function sparqlIngest(
                 }
 
                 await Promise.all(outputPromises);
+                console.log(`[sparqlIngest] Executed ${queryType} on remote SPARQL server ${config.graphStoreUrl}`);
             } 
         } else {
             throw new Error(`[sparqlIngest] No member IRI found in received RDF data: \n${rawQuads}`);
