@@ -2,7 +2,8 @@ import { Quad_Object } from "@rdfjs/types";
 import { RDF, SHACL } from "@treecg/types";
 import { Writer as N3Writer, Store, Parser } from "n3"
 
-export const CREATE = (store: Store, namedGraph?: string): string => {
+export const CREATE = (store: Store, namedGraph?: string, multipleNamedGraphs?: boolean): string => {
+    // TODO: Handle case of multiple members being Named Graphs
     const content = new N3Writer().quadsToString(store.getQuads(null, null, null, null));
     return `
         INSERT DATA {
@@ -11,41 +12,63 @@ export const CREATE = (store: Store, namedGraph?: string): string => {
     `;
 };
 
-export const UPDATE = (store: Store, namedGraph?: string): string => {
-    const formattedQuery = formatQuery(store);
+export const UPDATE = (store: Store, namedGraph?: string, multipleNamedGraphs?: boolean): string => {
+    // TODO: Handle case of multiple members being Named Graphs
+    const formattedQuery = formatDeleteQuery(store);
     const content = new N3Writer().quadsToString(store.getQuads(null, null, null, null));
     return `
         ${namedGraph ? `WITH <${namedGraph}>` : ""}
         DELETE { 
-            ${formattedQuery} 
+            ${formattedQuery[0]} 
         }
         INSERT { 
             ${content} 
         }
         WHERE { 
-            ${formattedQuery} 
+            ${formattedQuery[0]} 
         }
     `;
 };
 
-export const DELETE = (store: Store, memberIRI: string, memberShapes?: string[], namedGraph?: string): string => {
-    const formattedQuery = formatQuery(store, memberIRI, memberShapes);
+export const DELETE = (
+    store: Store, 
+    memberIRIs: string[], 
+    memberShapes?: string[], 
+    namedGraph?: string, 
+    multipleNamedGraphs?: boolean
+): string => {
+    // TODO: Handle case of multiple members being Named Graphs
+    const deleteBuilder = [];
+    const whereBuilder = [];
+
+    let indexStart = 0;
+    for (const memberIRI of memberIRIs) {
+        const formatted = formatDeleteQuery(store, memberIRI, memberShapes, indexStart);
+        deleteBuilder.push(formatted.length > 1 ? formatted[1] : formatted[0]);
+        whereBuilder.push(formatted[0]);
+        indexStart++;
+    }
 
     return `
         ${namedGraph ? `WITH <${namedGraph}>` : ""}
         DELETE {
-            ${formattedQuery.length > 1 ? formattedQuery[1] : formattedQuery[0]}
-        } WHERE { 
-            ${formattedQuery[0]}
+            ${deleteBuilder.join("\n")}
+        } WHERE {
+            ${whereBuilder.join("\n")}
         }
     `;
 }
 
-function formatQuery(memberStore: Store, memberIRI?: string, memberShapes?: string[]): string[] {
+function formatDeleteQuery(
+    memberStore: Store, 
+    memberIRI?: string, 
+    memberShapes?: string[], 
+    indexStart: number = 0
+): string[] {
     const subjectSet = new Set<string>();
     const queryBuilder: string[] = [];
     const formattedQueries: string[] = [];
-    let i = 0;
+    let i = indexStart;
 
     // Check if one or more member shapes were given. 
     // If not, we assume that all properties of the member are present 
@@ -102,7 +125,7 @@ function formatQuery(memberStore: Store, memberIRI?: string, memberShapes?: stri
             const deleteQueryBuilder: string[] = [];
             deleteQueryBuilder.push(`<${memberIRI}> ?p_${i} ?o_${i}.`);
             i++;
-            
+
             // Iterate over every declared member shape
             shapeIndex.forEach(mshStore => {
                 const propShapes = mshStore.getObjects(null, SHACL.property, null);
