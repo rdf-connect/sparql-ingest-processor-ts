@@ -1,5 +1,5 @@
 import { describe, expect, test } from "@jest/globals";
-import { extractProcessors, extractSteps, Source } from "@ajuvercr/js-runner";
+import { extractProcessors, extractSteps, Source } from "@rdfc/js-runner";
 import { resolve } from "path";
 
 describe("Tests for SPARQL ingest processor", async () => {
@@ -12,7 +12,7 @@ describe("Tests for SPARQL ingest processor", async () => {
         @prefix xsd: <http://www.w3.org/2001/XMLSchema#>.
         @prefix sh: <http://www.w3.org/ns/shacl#>.
 
-        <> owl:imports <./node_modules/@ajuvercr/js-runner/ontology.ttl>, <./processors.ttl>.
+        <> owl:imports <./node_modules/@rdfc/js-runner/ontology.ttl>, <./processors.ttl>.
 
         [ ] a :Channel;
             :reader <jr>;
@@ -83,16 +83,16 @@ describe("Tests for SPARQL ingest processor", async () => {
 
 function testReader(arg: any) {
     expect(arg).toBeInstanceOf(Object);
-    expect(arg.channel).toBeDefined();
-    expect(arg.channel.id).toBeDefined();
     expect(arg.ty).toBeDefined();
+    expect(arg.config.channel).toBeDefined();
+    expect(arg.config.channel.id).toBeDefined();
 }
 
 function testWriter(arg: any) {
     expect(arg).toBeInstanceOf(Object);
-    expect(arg.channel).toBeDefined();
-    expect(arg.channel.id).toBeDefined();
     expect(arg.ty).toBeDefined();
+    expect(arg.config.channel).toBeDefined();
+    expect(arg.config.channel.id).toBeDefined();
 }
 
 async function checkProc(location: string, func: string) {

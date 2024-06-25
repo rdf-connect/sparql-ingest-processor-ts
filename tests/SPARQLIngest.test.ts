@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll, afterEach } from "@jest/globals";
-import { SimpleStream } from "@ajuvercr/js-runner";
+import { SimpleStream } from "@rdfc/js-runner";
 import { DataFactory as DF, Writer as N3Writer, Parser, Store } from "n3";
 import { MemoryLevel } from "memory-level";
 import { Quadstore } from "quadstore";
