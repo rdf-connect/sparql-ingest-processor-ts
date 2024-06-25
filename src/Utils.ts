@@ -20,10 +20,16 @@ export async function doSPARQLRequest(query: string, url: string): Promise<void>
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         },
-        body: `update=${encodeURIComponent(query)}`
+        body: `update=${fixedEncodeURIComponent(query)}`
     });
 
     if (!res.ok) {
         throw new Error(`HTTP request failed with code ${res.status} and message: \n${await res.text()}`);
     }
+}
+
+function fixedEncodeURIComponent(str: string) {
+    return encodeURIComponent(str).replace(/[!'()*]/g, function(c) {
+        return '%' + c.charCodeAt(0).toString(16);
+    });
 }
