@@ -20,7 +20,7 @@ export async function doSPARQLRequest(query: string, url: string): Promise<void>
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         },
-        body: `query=${fixedEncodeURIComponent(query)}`
+        body: `update=${fixedEncodeURIComponent(query)}`
     });
 
     if (!res.ok) {
