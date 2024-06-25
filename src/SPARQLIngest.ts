@@ -118,7 +118,7 @@ export async function sparqlIngest(
                     // Clean up transaction stores
                     transactionMembers = [];
                 } else {
-                    // Determine if we have a named graph (either explicitly configure or as the member itself)
+                    // Determine if we have a named graph (either explicitly configured or as the member itself)
                     const ng = getNamedGraphIfAny(memberIRI, config.memberIsGraph, config.targetNamedGraph);
                     // Get the type of change
                     const ctv = store.getQuads(null, config.changeSemantics!.changeTypePath, null, null)[0];

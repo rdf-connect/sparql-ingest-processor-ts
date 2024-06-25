@@ -1,36 +1,42 @@
 {
-  "name": "sparql-ingest-processor-ts",
-  "version": "0.3.0",
-  "author": "Julián Rojas",
-  "type": "module",
-  "scripts": {
-    "build": "tsc",
-    "prepublishOnly": "npm run build",
-    "test": "bun test",
-    "watch": "tsc -w"
-  },
-  "files": [
-    "lib/**/*",
-    "./processors.ttl"
-  ],
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/julianrojas87/sparql-ingest-processor-ts.git"
-  },
-  "dependencies": {
-    "@treecg/types": "^0.4.6",
-    "n3": "^1.17.4"
-  },
-  "devDependencies": {
-    "@rdfc/js-runner": "^0.2.1",
-    "@jest/globals": "^29.7.0",
-    "@rdfjs/types": "^1.1.0",
-    "@types/bun": "latest",
-    "@types/n3": "^1.16.4",
-    "memory-level": "^1.0.0",
-    "quadstore": "^13.1.1",
-    "quadstore-comunica": "^4.3.1",
-    "typescript": "^5.5.2"
-  }
+    "name": "@rdfc/sparql-ingest-processor-ts",
+    "version": "0.3.0",
+    "description": "SPARQL Update function to be within RDF-Connect pipelines",
+    "author": "Julián Rojas",
+    "type": "module",
+    "scripts": {
+        "build": "tsc && tsc-alias",
+        "prepublishOnly": "npm run build",
+        "test": "bun test",
+        "watch": "tsc -w"
+    },
+    "files": [
+        "lib/**/*",
+        "./processors.ttl"
+    ],
+    "keywords": [
+        "SPARQL",
+        "RDF-Connect"
+    ],
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/rdf-connect/sparql-ingest-processor-ts.git"
+    },
+    "dependencies": {
+        "@treecg/types": "^0.4.6",
+        "n3": "^1.17.4"
+    },
+    "devDependencies": {
+        "@jest/globals": "^29.7.0",
+        "@rdfc/js-runner": "^0.2.1",
+        "@rdfjs/types": "^1.1.0",
+        "@types/bun": "latest",
+        "@types/n3": "^1.16.4",
+        "memory-level": "^1.0.0",
+        "quadstore": "^13.1.1",
+        "quadstore-comunica": "^4.3.1",
+        "tsc-alias": "^1.8.10",
+        "typescript": "^5.5.2"
+    }
 }

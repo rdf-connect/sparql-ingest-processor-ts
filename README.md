@@ -1,10 +1,10 @@
 # sparql-ingest-processor-ts
 
-[![Bun CI](https://github.com/julianrojas87/sparql-ingest-processor-ts/actions/workflows/build-test.yml/badge.svg)](https://github.com/julianrojas87/sparql-ingest-processor-ts/actions/workflows/build-test.yml) [![npm](https://img.shields.io/npm/v/sparql-ingest-processor-ts.svg?style=popout)](https://npmjs.com/package/sparql-ingest-processor-ts)
+[![Bun CI](https://github.com/rdf-connect/sparql-ingest-processor-ts/actions/workflows/build-test.yml/badge.svg)](https://github.com/rdf-connect/sparql-ingest-processor-ts/actions/workflows/build-test.yml) [![npm](https://img.shields.io/npm/v/@rdfc/sparql-ingest-processor-ts.svg?style=popout)](https://npmjs.com/package/@rdfc/sparql-ingest-processor-ts)
 
-Typescript [Connector Architecture](https://the-connector-architecture.github.io/site/docs/1_Home) processor for producing the corresponding SPARQL Update queries that write a stream of [SDS records](https://treecg.github.io/SmartDataStreams-Spec/) into a SPARQL triple store. Currently this repository exposes one function:
+Typescript [RDF-Connect](https://rdf-connect.github.io/rdfc.github.io/) processor for producing the corresponding SPARQL Update queries that write a stream of [SDS records](https://treecg.github.io/SmartDataStreams-Spec/) into a SPARQL triple store. Currently this repository exposes one function:
 
-### [`js:SPARQLIngest`](https://github.com/julianrojas87/sparql-ingest-processor-ts/blob/main/processors.ttl#L9)
+### [`js:SPARQLIngest`](https://github.com/rdf-connect/sparql-ingest-processor-ts/blob/main/processors.ttl#L9)
 
 This processor is able to take an input stream of SDS records (described by the `sds:stream` and `sds:payload` properties) and produce corresponding [SPARQL Update](https://www.w3.org/TR/sparql11-update/) queries (`INSERT DATA`, `DELETE INSERT WHERE` and `DELETE WHERE`) to be executed over a graph store via the [SPARQL protocol](https://www.w3.org/TR/sparql11-protocol/).
 
