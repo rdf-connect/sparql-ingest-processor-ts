@@ -1,8 +1,13 @@
 import { Quad_Object } from "@rdfjs/types";
 import { RDF, SHACL } from "@treecg/types";
-import { Writer as N3Writer, Store, Parser } from "n3"
+import { Writer as N3Writer, Parser } from "n3"
+import { RdfStore } from "rdf-stores";
+import { DataFactory } from "rdf-data-factory";
+import { getObjects, getSubjects } from "./Utils";
 
-export const CREATE = (store: Store, namedGraph?: string, multipleNamedGraphs?: boolean): string => {
+const df = new DataFactory();
+
+export const CREATE = (store: RdfStore, namedGraph?: string, multipleNamedGraphs?: boolean): string => {
     // TODO: Handle case of multiple members being Named Graphs
     const content = new N3Writer().quadsToString(store.getQuads(null, null, null, null));
     return `
@@ -12,7 +17,7 @@ export const CREATE = (store: Store, namedGraph?: string, multipleNamedGraphs?: 
     `;
 };
 
-export const UPDATE = (store: Store, namedGraph?: string, multipleNamedGraphs?: boolean): string => {
+export const UPDATE = (store: RdfStore, namedGraph?: string, multipleNamedGraphs?: boolean): string => {
     // TODO: Handle case of multiple members being Named Graphs
     const formattedQuery = formatDeleteQuery(store);
     const content = new N3Writer().quadsToString(store.getQuads(null, null, null, null));
@@ -31,10 +36,10 @@ export const UPDATE = (store: Store, namedGraph?: string, multipleNamedGraphs?: 
 };
 
 export const DELETE = (
-    store: Store, 
-    memberIRIs: string[], 
-    memberShapes?: string[], 
-    namedGraph?: string, 
+    store: RdfStore,
+    memberIRIs: string[],
+    memberShapes?: string[],
+    namedGraph?: string,
     multipleNamedGraphs?: boolean
 ): string => {
     // TODO: Handle case of multiple members being Named Graphs
@@ -60,9 +65,9 @@ export const DELETE = (
 }
 
 function formatDeleteQuery(
-    memberStore: Store, 
-    memberIRI?: string, 
-    memberShapes?: string[], 
+    memberStore: RdfStore,
+    memberIRI?: string,
+    memberShapes?: string[],
     indexStart: number = 0
 ): string[] {
     const subjectSet = new Set<string>();
@@ -94,9 +99,10 @@ function formatDeleteQuery(
         formattedQueries.push(queryBuilder.join("\n"))
     } else {
         // Create a shape index per target class
-        const shapeIndex = new Map<string, Store>();
+        const shapeIndex = new Map<string, RdfStore>();
         memberShapes.forEach(msh => {
-            const shapeStore = new Store(new Parser().parse(msh));
+            const shapeStore = RdfStore.createDefault();
+            new Parser().parse(msh).forEach(quad => shapeStore.addQuad(quad));
             shapeIndex.set(extractMainTargetClass(shapeStore).value, shapeStore);
         });
 
@@ -107,14 +113,14 @@ function formatDeleteQuery(
         // for a specific shape, based on the sh:targetClass.
         // Otherwise we have to include all shapes in the query pattern because we don't know
         // exactly which is the shape of the received member.
-        const memberType = memberStore.getObjects(memberIRI!, RDF.type, null)[0];
+        const memberType = getObjects(memberStore, df.namedNode(memberIRI!), RDF.terms.type, null)[0];
         if (memberType) {
             i++;
             const mshStore = shapeIndex.get(memberType.value);
-            const propShapes = mshStore!.getObjects(null, SHACL.property, null);
+            const propShapes = getObjects(mshStore!, null, SHACL.terms.property, null);
 
             for (const propSh of propShapes) {
-                const pred = mshStore!.getObjects(propSh, SHACL.path, null)[0];
+                const pred = getObjects(mshStore!, propSh, SHACL.terms.path, null)[0];
                 queryBuilder.push(`<${memberIRI}> <${pred.value}> ?subEnt_${i}.`);
                 queryBuilder.push(`?subEnt_${i} ?p_${i} ?o_${i}.`);
                 i++;
@@ -128,10 +134,10 @@ function formatDeleteQuery(
 
             // Iterate over every declared member shape
             shapeIndex.forEach(mshStore => {
-                const propShapes = mshStore.getObjects(null, SHACL.property, null);
+                const propShapes = getObjects(mshStore, null, SHACL.terms.property, null);
                 queryBuilder.push(" OPTIONAL { ");
                 for (const propSh of propShapes) {
-                    const pred = mshStore.getObjects(propSh, SHACL.path, null)[0];
+                    const pred = getObjects(mshStore, propSh, SHACL.terms.path, null)[0];
                     queryBuilder.push(`<${memberIRI}> <${pred.value}> ?subEnt_${i}.`);
                     deleteQueryBuilder.push(`<${memberIRI}> <${pred.value}> ?subEnt_${i}.`);
                     queryBuilder.push(`?subEnt_${i} ?p_${i} ?o_${i}.`);
@@ -153,13 +159,13 @@ function formatDeleteQuery(
 // We determine this by assuming that the main node shape
 // is not referenced by any other shape description.
 // If more than one is found an exception is thrown.
-function extractMainTargetClass(store: Store): Quad_Object {
-    const nodeShapes = store.getSubjects(RDF.type, SHACL.NodeShape, null);
+function extractMainTargetClass(store: RdfStore): Quad_Object {
+    const nodeShapes = getSubjects(store, RDF.terms.type, SHACL.terms.NodeShape, null);
     let mainNodeShape = null;
 
     if (nodeShapes && nodeShapes.length > 0) {
         for (const ns of nodeShapes) {
-            const isNotReferenced = store.getSubjects(null, ns, null).length === 0;
+            const isNotReferenced = getSubjects(store, null, ns, null).length === 0;
 
             if (isNotReferenced) {
                 if (!mainNodeShape) {
@@ -171,7 +177,7 @@ function extractMainTargetClass(store: Store): Quad_Object {
             }
         }
         if (mainNodeShape) {
-            const tcq = store.getObjects(mainNodeShape, SHACL.targetClass, null)[0];
+            const tcq = getObjects(store, mainNodeShape, SHACL.terms.targetClass, null)[0];
             if (tcq) {
                 return tcq;
             } else {

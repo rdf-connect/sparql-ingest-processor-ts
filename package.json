@@ -5,10 +5,10 @@
     "author": "Julián Rojas",
     "type": "module",
     "scripts": {
-        "build": "tsc && tsc-alias",
+        "build": "tspc && tsc-alias",
         "prepublishOnly": "npm run build",
-        "test": "bun test",
-        "watch": "tsc -w"
+        "test": "vitest run --coverage --coverage.include lib",
+        "prepare": "husky"
     },
     "files": [
         "lib/**/*",
@@ -25,18 +25,27 @@
     },
     "dependencies": {
         "@treecg/types": "^0.4.6",
-        "n3": "^1.17.4"
+        "n3": "^1.26.0",
+        "rdf-data-factory": "^2.0.2",
+        "rdf-stores": "^2.1.1",
+        "winston": "^3.17.0"
     },
     "devDependencies": {
-        "@jest/globals": "^29.7.0",
-        "@rdfc/js-runner": "^0.2.1",
-        "@rdfjs/types": "^1.1.0",
-        "@types/bun": "latest",
-        "@types/n3": "^1.16.4",
-        "memory-level": "^1.0.0",
-        "quadstore": "^13.1.1",
-        "quadstore-comunica": "^4.3.1",
-        "tsc-alias": "^1.8.10",
-        "typescript": "^5.5.2"
+        "@comunica/query-sparql": "^4.2.0",
+        "@rdfc/js-runner": "^1.0.0",
+        "@rdfjs/types": "^2.0.1",
+        "@types/n3": "^1.25.3",
+        "@types/node": "^22.15.29",
+        "@typescript-eslint/eslint-plugin": "^8.33.1",
+        "@typescript-eslint/parser": "^8.33.1",
+        "@vitest/coverage-v8": "^3.2.1",
+        "eslint": "^9.28.0",
+        "eslint-config-prettier": "^10.1.5",
+        "husky": "^9.1.7",
+        "ts-patch": "^3.3.0",
+        "tsc-alias": "^1.8.16",
+        "typescript": "^5.8.3",
+        "vite-tsconfig-paths": "^5.1.4",
+        "vitest": "^3.2.1"
     }
 }

@@ -45,7 +45,6 @@ js:SPARQLIngest a js:JsProcess;
     sh:path js:sparqlWriter;
     sh:name "sparqlWriter";
     sh:class :WriterChannel;
-    sh:minCount 1;
     sh:maxCount 1;
   ].
 

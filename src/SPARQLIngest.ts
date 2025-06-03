@@ -1,11 +1,20 @@
 import type { Stream, Writer } from "@rdfc/js-runner";
 import { SDS } from "@treecg/types";
-import { Store, Parser, DataFactory } from "n3";
+import { DataFactory } from "rdf-data-factory";
+import { RdfStore } from "rdf-stores";
+import { Parser } from "n3";
 import { CREATE, UPDATE, DELETE } from "./SPARQLQueries";
-import { Quad_Subject, Term } from "@rdfjs/types";
-import { doSPARQLRequest, sanitizeQuads } from "./Utils";
+import { 
+    doSPARQLRequest, 
+    sanitizeQuads, 
+    getObjects, 
+    getSubjects 
+} from "./Utils";
+import { getLoggerFor } from "./LogUtil";
 
-const { quad, namedNode } = DataFactory;
+import type { Quad_Subject, Term } from "@rdfjs/types";
+
+const df = new DataFactory();
 
 export type ChangeSemantics = {
     changeTypePath: string;
@@ -21,7 +30,7 @@ export type TransactionConfig = {
 
 export type IngestConfig = {
     memberIsGraph: boolean;
-    memberShapes?: string[];
+    memberShapes?: string[]; // TODO: This should be obtained from an SDS metadata stream
     changeSemantics?: ChangeSemantics;
     targetNamedGraph?: string;
     transactionConfig?: TransactionConfig;
@@ -31,7 +40,7 @@ export type IngestConfig = {
 export type TransactionMember = {
     memberId: string,
     transactionId: string,
-    store: Store
+    store: RdfStore
 }
 
 export async function sparqlIngest(
@@ -39,41 +48,64 @@ export async function sparqlIngest(
     config: IngestConfig,
     sparqlWriter?: Writer<string>
 ) {
+    const logger = getLoggerFor("sparqlIngest");
     let transactionMembers: TransactionMember[] = [];
 
     memberStream.data(async rawQuads => {
+        logger.debug(`Raw member data received: \n${rawQuads}`);
         const quads = new Parser().parse(rawQuads);
-        const store = new Store(quads);
+        logger.verbose(`Parsed ${quads.length} quads from received member data`);
+        const store = RdfStore.createDefault();
+        quads.forEach(q => store.addQuad(q));
 
         // Get member IRI form SDS description
-        const memberIRI = store.getObjects(null, SDS.payload, null)[0];
+        const memberIRI = getObjects(store, null, SDS.terms.payload, SDS.terms.custom("DataDescription"))[0];
+        logger.verbose(`Member IRI found: ${memberIRI ? memberIRI.value : "none"}`);
+        // TODO: produce some SDS metadata about the processing taking place here
 
         if (memberIRI) {
-            // Remove SDS wrapper
-            store.removeQuads(store.getQuads(null, SDS.stream, null, null));
-            store.removeQuads(store.getQuads(null, SDS.payload, null, null));
+            // Remove SDS wrapper quads
+            const sdsQuads = store.getQuads(null, null, null, SDS.terms.custom("DataDescription"));
+            sdsQuads.forEach(q => store.removeQuad(q));
 
             // Find if this member is part of a transaction
             if (config.transactionConfig) {
-                const transactionId = store.getObjects(null, config.transactionConfig.transactionIdPath, null)[0];
+                // TODO: use rdf-lens to support complex paths
+                const transactionId = getObjects(
+                    store, 
+                    null, 
+                    df.namedNode(config.transactionConfig.transactionIdPath), 
+                    null
+                )[0];
                 if (transactionId) {
                     // Remove transactionId property
-                    store.removeQuad(quad(
+                    store.removeQuad(df.quad(
                         <Quad_Subject>memberIRI,
-                        namedNode(config.transactionConfig.transactionIdPath),
+                        df.namedNode(config.transactionConfig.transactionIdPath),
                         transactionId
                     ));
                     // See if this is a finishing, new or ongoing transaction
-                    const isLastOfTransaction = store.getObjects(null, config.transactionConfig.transactionEndPath, null)[0];
+                    // TODO: use rdf-lens to support complex paths
+                    const isLastOfTransaction = getObjects(
+                        store, 
+                        null, 
+                        df.namedNode(config.transactionConfig.transactionEndPath),
+                        null
+                    )[0];
 
                     if (isLastOfTransaction) {
-                        console.log(`[sparqlIngest] Last member of ${transactionId.value} received!`);
+                        logger.info(`Last member of ${transactionId.value} received!`);
                         // Check this transaction is correct
-                        verifyTransaction(transactionMembers.map(ts => ts.store), config.transactionConfig.transactionIdPath, transactionId);
+                        verifyTransaction(
+                            transactionMembers.map(ts => ts.store), 
+                            config.transactionConfig.transactionIdPath, 
+                            transactionId
+                        );
                         // Remove is-last-of-transaction flag
-                        store.removeQuad(quad(
+                        // This might not be needed
+                        store.removeQuad(df.quad(
                             <Quad_Subject>memberIRI,
-                            namedNode(config.transactionConfig.transactionEndPath),
+                            df.namedNode(config.transactionConfig.transactionEndPath),
                             isLastOfTransaction
                         ));
                         // We copy all previous member quads into the current store
@@ -84,7 +116,11 @@ export async function sparqlIngest(
                         });
                     } else if (transactionMembers.length > 0) {
                         // Check this transaction is correct
-                        verifyTransaction(transactionMembers.map(ts => ts.store), config.transactionConfig.transactionIdPath, transactionId);
+                        verifyTransaction(
+                            transactionMembers.map(ts => ts.store), 
+                            config.transactionConfig.transactionIdPath, 
+                            transactionId
+                        );
                         // Is an ongoing transaction, so we add this member's quads into the transaction store
                         transactionMembers.push({
                             memberId: memberIRI.value,
@@ -93,9 +129,9 @@ export async function sparqlIngest(
                         });
                         return;
                     } else {
-                        console.log(`[sparqlIngest] New transaction ${transactionId.value} started!`);
+                        logger.info(`New transaction ${transactionId.value} started!`);
                         if (transactionMembers.length > 0)
-                            throw new Error(`[sparqlIngest] Received new transaction ${transactionId.value}, `
+                            throw new Error(`Received new transaction ${transactionId.value}, `
                                 + `but older transaction ${transactionMembers[0].transactionId} hasn't been finalized `);
                         // Is a new transaction, add it to the transaction store
                         transactionMembers.push({
@@ -121,19 +157,27 @@ export async function sparqlIngest(
                     // Determine if we have a named graph (either explicitly configured or as the member itself)
                     const ng = getNamedGraphIfAny(memberIRI, config.memberIsGraph, config.targetNamedGraph);
                     // Get the type of change
-                    const ctv = store.getQuads(null, config.changeSemantics!.changeTypePath, null, null)[0];
+                    // TODO: use rdf-lens to support complex paths
+                    const ctv = store.getQuads(
+                        null, 
+                        df.namedNode(config.changeSemantics!.changeTypePath)
+                    )[0];
                     // Remove change type quad from store
+                    // TODO: this should be made configurable as not always we want to remove this quad.
                     store.removeQuad(ctv);
                     // Sanitize quads to prevent issues on SPARQL queries
                     sanitizeQuads(store);
                     // Assemble corresponding SPARQL UPDATE query
                     if (ctv.object.value === config.changeSemantics.createValue) {
+                        logger.info(`Preparing 'INSERT DATA {}' SPARQL query for member ${memberIRI.value}`);
                         query = CREATE(store, ng);
                         queryType = "CREATE";
                     } else if (ctv.object.value === config.changeSemantics.updateValue) {
+                        logger.info(`Preparing 'DELETE {} INSERT {} WHERE {}' SPARQL query for member ${memberIRI.value}`);
                         query = UPDATE(store, ng);
                         queryType = "UPDATE";
                     } else if (ctv.object.value === config.changeSemantics.deleteValue) {
+                        logger.info(`Preparing 'DELETE WHERE {}' SPARQL query for member ${memberIRI.value}`);
                         query = DELETE(store, [memberIRI.value], config.memberShapes, ng);
                         queryType = "DELETE";
                     } else {
@@ -142,29 +186,34 @@ export async function sparqlIngest(
                 }
             } else {
                 if (transactionMembers.length > 0) {
-                    transactionMembers.forEach(ts => store.addQuads(ts.store.getQuads(null, null, null, null)));
+                    transactionMembers.forEach(ts => {
+                        ts.store.getQuads(null, null, null, null).forEach(q => store.addQuad(q));
+                    });
+                    logger.info(`Preparing 'DELETE {} INSERT {} WHERE {}' SPARQL query for transaction member ${memberIRI.value}`);
                     query = UPDATE(store, config.targetNamedGraph);
                 } else {
                     // Determine if we have a named graph (either explicitly configure or as the member itself)
                     const ng = getNamedGraphIfAny(memberIRI, config.memberIsGraph, config.targetNamedGraph);
                     // No change semantics are provided so we do a DELETE/INSERT query by default
+                    logger.info(`Preparing 'DELETE {} INSERT {} WHERE {}' SPARQL query for member ${memberIRI.value}`);
                     query = UPDATE(store, ng);
                 }
             }
 
             // Execute the update query
             if (query) {
-                const outputPromises = [];
-                if (sparqlWriter) {
-                    outputPromises.push(sparqlWriter.push(query));
-                }
+                logger.debug(`Generated SPARQL query: \n${query}`);
                 if (config.graphStoreUrl) {
-                    outputPromises.push(doSPARQLRequest(query, config.graphStoreUrl));
+                   await doSPARQLRequest(query, config.graphStoreUrl);
+                   logger.info(`Executed ${queryType} on remote SPARQL server ${config.graphStoreUrl} - ${new Date().toISOString()}`);
                 }
 
-                await Promise.all(outputPromises);
-                console.log(`[sparqlIngest] Executed ${queryType} on remote SPARQL server ${config.graphStoreUrl} - ${new Date().toISOString()}`);
-            } 
+                if (sparqlWriter) {
+                    await sparqlWriter.push(query);
+                }
+            } else {
+                logger.warn(`No query generated for member ${memberIRI.value}`);
+            }
         } else {
             throw new Error(`[sparqlIngest] No member IRI found in received RDF data: \n${rawQuads}`);
         }
@@ -175,10 +224,10 @@ export async function sparqlIngest(
     }
 }
 
-function verifyTransaction(stores: Store[], transactionIdPath: string, transactionId: Term): void {
+function verifyTransaction(stores: RdfStore[], transactionIdPath: string, transactionId: Term): void {
     for (const store of stores) {
         // Get all transaction IDs
-        const tIds = store.getObjects(null, transactionIdPath, null);
+        const tIds = getObjects(store, null, df.namedNode(transactionIdPath), null);
         for (const tid of tIds) {
             if (!tid.equals(transactionId)) {
                 throw new Error(`[sparqlIngest] Received non-matching transaction ID ${transactionId.value} `
@@ -207,27 +256,28 @@ function createTransactionQueries(
     config: IngestConfig,
 
 ): string {
-    console.log(`[sparqlIngest] Creating multi-operation SPARQL UPDATE query for ${transactionMembers.length}`
+    const logger = getLoggerFor("createTransactionQueries");
+    logger.info(`Creating multi-operation SPARQL UPDATE query for ${transactionMembers.length}`
         + ` members of transaction ${transactionMembers[0].transactionId}`);
     // This is a transaction query, we need to deal with possibly multiple types of queries
-    const createStore = new Store();
-    const updateStore = new Store();
-    const deleteStore = new Store();
+    const createStore = RdfStore.createDefault();
+    const updateStore = RdfStore.createDefault();
+    const deleteStore = RdfStore.createDefault();
     const deleteMembers: string[] = [];
 
     const transactionQueryBuilder: string[] = [];
 
     for (const tsm of transactionMembers) {
-        const ctv = tsm.store.getQuads(null, config.changeSemantics!.changeTypePath, null, null)[0];
+        const ctv = tsm.store.getQuads(null, df.namedNode(config.changeSemantics!.changeTypePath))[0];
         // Remove change type quad from store
         tsm.store.removeQuad(ctv);
 
         if (ctv.object.value === config.changeSemantics!.createValue) {
-            createStore.addQuads(tsm.store.getQuads(null, null, null, null));
+            tsm.store.getQuads(null, null, null, null).forEach(q => createStore.addQuad(q));
         } else if (ctv.object.value === config.changeSemantics!.updateValue) {
-            updateStore.addQuads(tsm.store.getQuads(null, null, null, null));
+            tsm.store.getQuads(null, null, null, null).forEach(q => updateStore.addQuad(q));
         } else if (ctv.object.value === config.changeSemantics!.deleteValue) {
-            deleteStore.addQuads(tsm.store.getQuads(null, null, null, null));
+            tsm.store.getQuads(null, null, null, null).forEach(q => deleteStore.addQuad(q));
             deleteMembers.push(tsm.memberId);
         } else {
             throw new Error(`[sparqlIngest] Unrecognized change type value: ${ctv.object.value}`);
