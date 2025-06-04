@@ -1,14 +1,46 @@
 import { XSD } from "@treecg/types";
-import { Store, DataFactory as DF } from "n3";
+import { DataFactory } from "rdf-data-factory";
+import { RdfStore } from "rdf-stores";
 
-export function sanitizeQuads(store: Store): void {
-    for (const q of store.getQuads(null, null, null, null)) {
+import type { Term, Quad_Subject, Quad_Object } from "@rdfjs/types";
+
+const df = new DataFactory();
+
+export function getSubjects(
+    store: RdfStore,
+    predicate: Term | null,
+    object: Term | null,
+    graph?: Term | null,
+): Quad_Subject[] {
+    return store.getQuads(null, predicate, object, graph).map((quad) => {
+        return quad.subject;
+    });
+}
+
+export function getObjects(
+    store: RdfStore,
+    subject: Term | null,
+    predicate: Term | null,
+    graph?: Term | null,
+): Quad_Object[] {
+    return store.getQuads(subject, predicate, null, graph).map((quad) => {
+        return quad.object;
+    });
+}
+
+export function sanitizeQuads(store: RdfStore): void {
+    for (const q of store.getQuads()) {
         // There is an issue with triples like <a> <b> +30.
         // Virtuoso doesn't accept the implicit integer type including the + sign.
         if (q.object.termType === "Literal" && q.object.datatype.value === XSD.integer) {
             if (/\+\d+/.test(q.object.value) && q.object.value.startsWith("+")) {
                 store.removeQuad(q);
-                store.addQuad(q.subject, q.predicate, DF.literal(q.object.value.substring(1), DF.namedNode(XSD.integer)), q.graph);
+                store.addQuad(df.quad(
+                    q.subject,
+                    q.predicate,
+                    df.literal(q.object.value.substring(1), df.namedNode(XSD.integer)),
+                    q.graph
+                ));
             }
         }
     }
@@ -29,7 +61,7 @@ export async function doSPARQLRequest(query: string, url: string): Promise<void>
 }
 
 function fixedEncodeURIComponent(str: string) {
-    return encodeURIComponent(str).replace(/[!'()*]/g, function(c) {
+    return encodeURIComponent(str).replace(/[!'()*]/g, function (c) {
         return '%' + c.charCodeAt(0).toString(16);
     });
 }

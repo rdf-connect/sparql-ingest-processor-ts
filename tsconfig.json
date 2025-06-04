@@ -1,7 +1,10 @@
 {
   "compilerOptions": {
+    "declaration": true,
     "outDir": "lib/",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "target": "ES2022",
     "module": "ES2022",
     "moduleResolution": "node",
@@ -15,12 +18,20 @@
     "allowSyntheticDefaultImports": true,
     "incremental": true,
     "esModuleInterop": true,
-    "types": ["node"]
+    "removeComments": true
   },
   "ts-node": {
     "esm": true,
     "experimentalSpecifierResolution": "node"
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules/**/*"]
+  "tsc-alias": {
+    "resolveFullPaths": true,
+    "verbose": false
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules/**/*"
+  ]
 }

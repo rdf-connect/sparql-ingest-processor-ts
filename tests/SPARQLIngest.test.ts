@@ -1,14 +1,18 @@
-import { describe, test, expect, beforeAll, afterEach } from "@jest/globals";
+import { describe, test, expect } from "vitest";
 import { SimpleStream } from "@rdfc/js-runner";
-import { DataFactory as DF, Writer as N3Writer, Parser, Store } from "n3";
-import { MemoryLevel } from "memory-level";
-import { Quadstore } from "quadstore";
-import { Engine } from "quadstore-comunica";
-import { sparqlIngest, IngestConfig } from "../src/SPARQLIngest";
-import { Bindings } from "@rdfjs/types";
+import { DataFactory } from "rdf-data-factory";
+import { RdfStore } from "rdf-stores";
+import { Writer as N3Writer, Parser } from "n3";
+import { QueryEngine } from "@comunica/query-sparql";
+import { sparqlIngest } from "../src/SPARQLIngest";
 import { SDS } from "@treecg/types";
 
-describe("Functional tests for the sparqlIngest Connector Architecture function", () => {
+import type { Bindings } from "@rdfjs/types";
+import type { IngestConfig } from "../src/SPARQLIngest";
+
+const df = new DataFactory();
+
+describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
 
     const ENTITY_SHAPE = `
         @prefix sh: <http://www.w3.org/ns/shacl#>.
@@ -25,20 +29,6 @@ describe("Functional tests for the sparqlIngest Connector Architecture function"
             ].
     `;
 
-    let quadstore = new Quadstore({ backend: new MemoryLevel<string, string>(), dataFactory: DF });
-    let engine = new Engine(quadstore);
-
-    beforeAll(async () => {
-        await quadstore.open();
-    });
-
-    afterEach(async () => {
-        await quadstore.close();
-        quadstore = new Quadstore({ backend: new MemoryLevel<string, string>(), dataFactory: DF });
-        engine = new Engine(quadstore);
-        await quadstore.open();
-    });
-
     test("SDS Member INSERT into a SPARQL endpoint", async () => {
         const memberStream = new SimpleStream<string>();
         const sparqlWriter = new SimpleStream<string>();
@@ -52,13 +42,21 @@ describe("Functional tests for the sparqlIngest Connector Architecture function"
             }
         };
 
+        const localStore = RdfStore.createDefault();
+        const myEngine = new QueryEngine();
+
         const ingestPromise = new Promise<void>(resolve => {
             sparqlWriter.data(async query => {
                 // Execute produced SPARQL query
-                await engine.queryVoid(query);
+                await myEngine.queryVoid(query, {
+                    sources: [localStore],
+                });
 
                 // Query the triple store to verify that triples were inserted
-                const stream = await engine.queryBindings("SELECT * WHERE { ?s ?p ?o }");
+                const stream = await myEngine.queryBindings("SELECT * WHERE { ?s ?p ?o }", {
+                    sources: [localStore],
+                });
+
                 let sawEntity = false;
                 let sawProp2 = false;
                 let sawNestedType = false;
@@ -90,7 +88,11 @@ describe("Functional tests for the sparqlIngest Connector Architecture function"
         await sparqlIngest(memberStream, config, sparqlWriter);
 
         // Push 1 members for ingestion
-        await memberStream.push(dataGenerator(config.changeSemantics!.createValue, "0", true));
+        await memberStream.push(dataGenerator({
+            changeType: config.changeSemantics!.createValue,
+            includeAllProps: true,
+            withMetadata: true,
+        }));
 
         await ingestPromise;
     });
@@ -103,15 +105,22 @@ describe("Functional tests for the sparqlIngest Connector Architecture function"
         };
 
         // Add some data to the triple store first
-        await quadstore.multiPut(new Parser().parse(dataGenerator()));
+        const localStore = RdfStore.createDefault();
+        new Parser().parse(dataGenerator({ includeAllProps: true })).forEach(quad => localStore.addQuad(quad));
+        const myEngine = new QueryEngine();
 
         const ingestPromise = new Promise<void>(resolve => {
             sparqlWriter.data(async query => {
                 // Execute produced SPARQL query
-                await engine.queryVoid(query);
+                await myEngine.queryVoid(query, {
+                    sources: [localStore],
+                });
 
                 // Query the triple store to verify that triples were updated properly
-                const stream = await engine.queryBindings("SELECT * WHERE { ?s ?p ?o }");
+                const stream = await myEngine.queryBindings("SELECT * WHERE { ?s ?p ?o }", {
+                    sources: [localStore],
+                });
+
                 let sawEntity = false;
                 let sawProp2 = false;
                 let sawNestedType = false;
@@ -148,14 +157,18 @@ describe("Functional tests for the sparqlIngest Connector Architecture function"
         await sparqlIngest(memberStream, config, sparqlWriter);
 
         // Prepare updated member
-        const store = new Store(new Parser().parse(dataGenerator()));
+        const store = RdfStore.createDefault();
+        new Parser().parse(dataGenerator({ withMetadata: true, includeAllProps: true }))
+            .forEach(quad => store.addQuad(quad));
         store.addQuad(
-            DF.namedNode("https://example.org/entity/Entity_0"),
-            DF.namedNode("https://example.org/ns#newProp"),
-            DF.literal("Updated value")
+            df.quad(
+                df.namedNode("https://example.org/entity/Entity_0"),
+                df.namedNode("https://example.org/ns#newProp"),
+                df.literal("Updated value")
+            )
         );
 
-        await memberStream.push(new N3Writer().quadsToString(store.getQuads(null, null, null, null)));
+        await memberStream.push(new N3Writer().quadsToString(store.getQuads()));
 
         await ingestPromise;
     });
@@ -174,22 +187,32 @@ describe("Functional tests for the sparqlIngest Connector Architecture function"
         };
 
         // Add some data to the triple store first
-        await quadstore.multiPut(new Parser().parse(dataGenerator()));
+        const localStore = RdfStore.createDefault();
+        new Parser().parse(dataGenerator({ includeAllProps: true })).forEach(quad => localStore.addQuad(quad));
+        const myEngine = new QueryEngine();
 
         const ingestPromise = new Promise<void>(resolve => {
             sparqlWriter.data(async query => {
                 // Execute produced SPARQL query
-                await engine.queryVoid(query);
+                await myEngine.queryVoid(query, {
+                    sources: [localStore],
+                });
 
                 // Query the triple store to verify that triples were deleted properly
-                const stream = await engine.queryBindings("SELECT * WHERE { ?s ?p ?o }");
+                const stream = await myEngine.queryBindings("SELECT * WHERE { ?s ?p ?o }", {
+                    sources: [localStore],
+                });
 
                 let counter = 0;
-                stream.on("data", () => {
+                stream.on("data", (bindings: Bindings) => {
+                    const s = bindings.get("s");
+                    const p = bindings.get("p");
+                    const o = bindings.get("o");
+                    console.log(s?.value, p?.value, o?.value);
                     counter++;
                 }).on("end", () => {
-                    // Only the SDS triples should be there
-                    expect(counter).toBe(2);
+                    // No triples should be left in the store
+                    expect(counter).toBe(0);
                     resolve();
                 });
             });
@@ -198,7 +221,11 @@ describe("Functional tests for the sparqlIngest Connector Architecture function"
         // Execute processor function
         await sparqlIngest(memberStream, config, sparqlWriter);
 
-        await memberStream.push(dataGenerator(config.changeSemantics!.deleteValue));
+        await memberStream.push(dataGenerator({
+            changeType: config.changeSemantics!.deleteValue,
+            includeAllProps: true,
+            withMetadata: true,
+        }));
 
         await ingestPromise;
     });
@@ -227,22 +254,27 @@ describe("Functional tests for the sparqlIngest Connector Architecture function"
         };
 
         // Add some initial data to the triple store
-        await quadstore.multiPut(new Parser().parse(dataGenerator()));
+        const localStore = RdfStore.createDefault();
+        new Parser().parse(dataGenerator({ includeAllProps: true })).forEach(quad => localStore.addQuad(quad));
+        const myEngine = new QueryEngine();
 
         const ingestPromise = new Promise<void>(resolve => {
             sparqlWriter.data(async query => {
                 // Execute produced SPARQL query
-                await engine.queryVoid(query);
+                await myEngine.queryVoid(query, {
+                    sources: [localStore],
+                });
 
                 // Query the triple store to verify that triples were deleted properly
-                const stream = await engine.queryBindings("SELECT * WHERE { ?s ?p ?o }");
+                const stream = await myEngine.queryBindings("SELECT * WHERE { ?s ?p ?o }", {
+                    sources: [localStore],
+                });
 
                 let counter = 0;
                 stream.on("data", () => {
                     counter++;
                 }).on("end", () => {
-                    // Only the SDS triples should be there
-                    expect(counter).toBe(2);
+                    expect(counter).toBe(0);
                     resolve();
                 });
             });
@@ -252,7 +284,11 @@ describe("Functional tests for the sparqlIngest Connector Architecture function"
         await sparqlIngest(memberStream, config, sparqlWriter);
 
         // Prepare property-less (only type and change type) member
-        await memberStream.push(dataGenerator(config.changeSemantics!.deleteValue, "0", false));
+        await memberStream.push(dataGenerator({
+            changeType: config.changeSemantics!.deleteValue,
+            includeAllProps: false,
+            withMetadata: true,
+        }));
 
         await ingestPromise;
     });
@@ -287,23 +323,27 @@ describe("Functional tests for the sparqlIngest Connector Architecture function"
             }
         };
 
-        // Add some initial data to the triple store
-        await quadstore.multiPut(new Parser().parse(dataGenerator()));
+        const localStore = RdfStore.createDefault();
+        new Parser().parse(dataGenerator({ includeAllProps: true })).forEach(quad => localStore.addQuad(quad));
+        const myEngine = new QueryEngine();
 
         const ingestPromise = new Promise<void>(resolve => {
             sparqlWriter.data(async query => {
                 // Execute produced SPARQL query
-                await engine.queryVoid(query);
+                await myEngine.queryVoid(query, {
+                    sources: [localStore],
+                });
 
                 // Query the triple store to verify that triples were deleted properly
-                const stream = await engine.queryBindings("SELECT * WHERE { ?s ?p ?o }");
+                const stream = await myEngine.queryBindings("SELECT * WHERE { ?s ?p ?o }", {
+                    sources: [localStore],
+                });
 
                 let counter = 0;
                 stream.on("data", () => {
                     counter++;
                 }).on("end", () => {
-                    // Only the SDS triples should be there
-                    expect(counter).toBe(2);
+                    expect(counter).toBe(0);
                     resolve();
                 });
             });
@@ -313,26 +353,32 @@ describe("Functional tests for the sparqlIngest Connector Architecture function"
         await sparqlIngest(memberStream, config, sparqlWriter);
 
         // Prepare property-less (only type and change type) member
-        const store = new Store();
-        store.addQuads([
-            DF.quad(
-                DF.blankNode(),
-                DF.namedNode(SDS.stream),
-                DF.namedNode("https://example.org/ns#sdsStream")
-            ),
-            DF.quad(
-                DF.blankNode(),
-                DF.namedNode(SDS.payload),
-                DF.namedNode("https://example.org/entity/Entity_0")
-            ),
-            DF.quad(
-                DF.namedNode("https://example.org/entity/Entity_0"),
-                DF.namedNode("https://example.org/ns#changeType"),
-                DF.namedNode("https://example.org/ns#Delete")
+        const store = RdfStore.createDefault();
+        store.addQuad(
+            df.quad(
+                df.blankNode(),
+                df.namedNode(SDS.stream),
+                df.namedNode("https://example.org/ns#sdsStream"),
+                df.namedNode(SDS.custom("DataDescription"))
             )
-        ]);
+        );
+        store.addQuad(
+            df.quad(
+                df.blankNode(),
+                df.namedNode(SDS.payload),
+                df.namedNode("https://example.org/entity/Entity_0"),
+                df.namedNode(SDS.custom("DataDescription"))
+            )
+        );
+        store.addQuad(
+            df.quad(
+                df.namedNode("https://example.org/entity/Entity_0"),
+                df.namedNode("https://example.org/ns#changeType"),
+                df.namedNode("https://example.org/ns#Delete")
+            )
+        );
 
-        await memberStream.push(new N3Writer().quadsToString(store.getQuads(null, null, null, null)));
+        await memberStream.push(new N3Writer().quadsToString(store.getQuads()));
 
         await ingestPromise;
     });
@@ -356,17 +402,23 @@ describe("Functional tests for the sparqlIngest Connector Architecture function"
         };
 
         // Add some data to the triple store first (ex:Entity_0, ex:Entity_1, ex:Entity_2 and ex:Entity_3)
-        await Promise.all([
-            quadstore.multiPut(new Parser().parse(dataGenerator(undefined, "0", true))),
-            quadstore.multiPut(new Parser().parse(dataGenerator(undefined, "1", true))),
-            quadstore.multiPut(new Parser().parse(dataGenerator(undefined, "2", true))),
-            quadstore.multiPut(new Parser().parse(dataGenerator(undefined, "3", true)))
-        ]);
+        const localStore = RdfStore.createDefault();
+        ["0", "1", "2", "3"].forEach(index => {
+            new Parser().parse(dataGenerator({
+                includeAllProps: true,
+                memberIndex: index,
+                withMetadata: false,
+            })).forEach(quad => localStore.addQuad(quad));
+        });
+
+        const myEngine = new QueryEngine();
 
         const ingestPromise = new Promise<void>(resolve => {
             sparqlWriter.data(async query => {
                 // Execute produced SPARQL query
-                await engine.queryVoid(query);
+                await myEngine.queryVoid(query, {
+                    sources: [localStore],
+                });
 
                 /**
                  * Whe should see that:
@@ -375,7 +427,10 @@ describe("Functional tests for the sparqlIngest Connector Architecture function"
                  * - ex:Entity_2 and ex:Entity_3 were deleted
                  */
                 // Query the triple store to verify that triples were updated properly
-                const stream = await engine.queryBindings("SELECT * WHERE { ?s ?p ?o }");
+                const stream = await myEngine.queryBindings("SELECT * WHERE { ?s ?p ?o }", {
+                    sources: [localStore],
+                });
+
                 let sawEntity0 = false;
                 let sawEntity1 = false;
                 let sawEntity2 = false;
@@ -418,7 +473,7 @@ describe("Functional tests for the sparqlIngest Connector Architecture function"
                         && o?.value === "Updated value") {
                         sawNewPropIn1 = true;
                     }
-                    
+
                 }).on("end", () => {
                     expect(sawEntity0).toBeTruthy();
                     expect(sawEntity1).toBeTruthy();
@@ -437,78 +492,93 @@ describe("Functional tests for the sparqlIngest Connector Architecture function"
         await sparqlIngest(memberStream, config, sparqlWriter);
 
         // Create new members ex:Entity_4 and ex:Entity_5
-        await memberStream.push(dataGenerator(
-            config.changeSemantics!.createValue,
-            "4",
-            true,
-            true, // is part of transaction
-            false // is last of transaction
-        ));
-        await memberStream.push(dataGenerator(
-            config.changeSemantics!.createValue,
-            "5",
-            true,
-            true, // is part of transaction
-            false // is last of transaction
-        ));
+        await memberStream.push(dataGenerator({
+            changeType: config.changeSemantics!.createValue,
+            memberIndex: "4",
+            includeAllProps: true,
+            withMetadata: true,
+            isPartOfTransaction: true,
+            isLastOfTransaction: false,
+        }));
+        await memberStream.push(dataGenerator({
+            changeType: config.changeSemantics!.createValue,
+            memberIndex: "5",
+            includeAllProps: true,
+            withMetadata: true,
+            isPartOfTransaction: true,
+            isLastOfTransaction: false,
+        }));
 
         // Update members ex:Entity_0 and ex:Entity_1
-        const updateStore0 = new Store(new Parser().parse(dataGenerator(
-            config.changeSemantics!.updateValue,
-            "0",
-            true,
-            true, // is part of transaction
-            false // is last of transaction
-        )));
+        const updateStore0 = RdfStore.createDefault();
+        new Parser().parse(dataGenerator({
+            changeType: config.changeSemantics!.updateValue,
+            memberIndex: "0",
+            includeAllProps: true,
+            withMetadata: true,
+            isPartOfTransaction: true,
+            isLastOfTransaction: false
+        })).forEach(quad => updateStore0.addQuad(quad));
+
         updateStore0.addQuad(
-            DF.namedNode("https://example.org/entity/Entity_0"),
-            DF.namedNode("https://example.org/ns#newProp"),
-            DF.literal("Updated value")
+            df.quad(
+                df.namedNode("https://example.org/entity/Entity_0"),
+                df.namedNode("https://example.org/ns#newProp"),
+                df.literal("Updated value")
+            )
         );
-        await memberStream.push(new N3Writer().quadsToString(updateStore0.getQuads(null, null, null, null)));
-        
-        const updateStore1 = new Store(new Parser().parse(dataGenerator(
-            config.changeSemantics!.updateValue,
-            "1",
-            true,
-            true, // is part of transaction
-            false // is last of transaction
-        )));
+        await memberStream.push(new N3Writer().quadsToString(updateStore0.getQuads()));
+
+        const updateStore1 = RdfStore.createDefault();
+        new Parser().parse(dataGenerator({
+            changeType: config.changeSemantics!.updateValue,
+            memberIndex: "1",
+            includeAllProps: true,
+            withMetadata: true,
+            isPartOfTransaction: true,
+            isLastOfTransaction: false
+        })).forEach(quad => updateStore1.addQuad(quad));
+
         updateStore1.addQuad(
-            DF.namedNode("https://example.org/entity/Entity_1"),
-            DF.namedNode("https://example.org/ns#newProp"),
-            DF.literal("Updated value")
+            df.quad(
+            df.namedNode("https://example.org/entity/Entity_1"),
+            df.namedNode("https://example.org/ns#newProp"),
+            df.literal("Updated value")
+            )
         );
-        await memberStream.push(new N3Writer().quadsToString(updateStore1.getQuads(null, null, null, null)));
+        await memberStream.push(new N3Writer().quadsToString(updateStore1.getQuads()));
 
         // Delete members ex:Entity_2 and ex:Entity_3 by giving only its member type and shape
-        await memberStream.push(dataGenerator(
-            config.changeSemantics!.deleteValue,
-            "2",
-            false, // include all properties
-            true, // is part of transaction
-            false // is last of transaction
-        ));
-        await memberStream.push(dataGenerator(
-            config.changeSemantics!.deleteValue,
-            "3",
-            false, // include all properties
-            true, // is part of transaction
-            true // is last of transaction
-        ));
+        await memberStream.push(dataGenerator({
+            changeType: config.changeSemantics!.deleteValue,
+            memberIndex: "2",
+            includeAllProps: false,
+            withMetadata: true,
+            isPartOfTransaction: true,
+            isLastOfTransaction: false
+        }));
+        await memberStream.push(dataGenerator({
+            changeType: config.changeSemantics!.deleteValue,
+            memberIndex: "3",
+            includeAllProps: false,
+            withMetadata: true,
+            isPartOfTransaction: true,
+            isLastOfTransaction: true
+        }));
 
         await ingestPromise;
     });
 });
 
-function dataGenerator(
+function dataGenerator(props: {
     changeType?: string,
     memberIndex?: string,
-    includeAllProps: boolean = true,
-    isPartOfTransaction: boolean = false,
-    isLastOfTransaction: boolean = false,
-    memberIsGraph: boolean = false,
-): string {
+    withMetadata?: boolean,
+    includeAllProps?: boolean,
+    isPartOfTransaction?: boolean,
+    isLastOfTransaction?: boolean,
+    memberIsGraph?: boolean,
+}): string {
 
     const PREFIXES = `
         @prefix xsd: <http://www.w3.org/2001/XMLSchema#>.
@@ -520,18 +590,20 @@ function dataGenerator(
 
     let record;
 
-    if (!memberIsGraph) {
+    if (!props.memberIsGraph) {
         record = `
             ${PREFIXES}
 
-            [] sds:stream ex:sdsStream;
-                sds:payload <https://example.org/entity/Entity_${memberIndex || 0}>.
+            ${props.withMetadata ? `sds:DataDescription {
+                [] sds:stream ex:sdsStream;
+                    sds:payload <https://example.org/entity/Entity_${props.memberIndex || 0}>.
+            }` : ""}
 
-            <https://example.org/entity/Entity_${memberIndex || 0}> a ex:Entity;
-                ${changeType ? `ex:changeType <${changeType}>;` : ""}
-                ${isPartOfTransaction ? `ldes:transactionId "transact_123";` : ""}
-                ${isLastOfTransaction ? `ldes:isLastOfTransaction "true"^^xsd:boolean;` : ""}
-                ${includeAllProps ? `
+            <https://example.org/entity/Entity_${props.memberIndex || 0}> a ex:Entity;
+                ${props.changeType ? `ex:changeType <${props.changeType}>;` : ""}
+                ${props.isPartOfTransaction ? `ldes:transactionId "transact_123";` : ""}
+                ${props.isLastOfTransaction ? `ldes:isLastOfTransaction "true"^^xsd:boolean;` : ""}
+                ${props.includeAllProps ? `
                     ex:prop1 "some value";
                     ex:prop2 [
                         a ex:NestedEntity;
@@ -545,15 +617,18 @@ function dataGenerator(
         record = `
             ${PREFIXES}
 
-            [] sds:stream ex:sdsStream;
-                sds:payload <https://example.org/namedGraphs/Graph_${memberIndex || 0}>.
+            ${props.withMetadata ? `sds:DataDescription {
+                [] sds:stream ex:sdsStream;
+                    sds:payload <https://example.org/namedGraphs/Graph_${props.memberIndex || 0}>.
+            }` : ""}
+            
 
-            <https://example.org/namedGraphs/Graph_${memberIndex || 0}> ${changeType ? `ex:changeType <${changeType}>;` : ""}
-            ${isPartOfTransaction ? `<https://example.org/namedGraphs/Graph_${memberIndex || 0}> ldes:transactionId "transact_123";` : ""}
-            ${isLastOfTransaction ? `<https://example.org/namedGraphs/Graph_${memberIndex || 0}> ldes:isLastOfTransaction "true"^^xsd:boolean;` : ""}
-            <https://example.org/namedGraphs/Graph_${memberIndex || 0}> {
+            <https://example.org/namedGraphs/Graph_${props.memberIndex || 0}> ${props.changeType ? `ex:changeType <${props.changeType}>;` : ""}
+            ${props.isPartOfTransaction ? `<https://example.org/namedGraphs/Graph_${props.memberIndex || 0}> ldes:transactionId "transact_123";` : ""}
+            ${props.isLastOfTransaction ? `<https://example.org/namedGraphs/Graph_${props.memberIndex || 0}> ldes:isLastOfTransaction "true"^^xsd:boolean;` : ""}
+            <https://example.org/namedGraphs/Graph_${props.memberIndex || 0}> {
                 <https://example.org/entity/Entity_A> a ex:Entity;
-                    ${includeAllProps ? `
+                    ${props.includeAllProps ? `
                         ex:prop1 "some value";
                         ex:prop2 [
                             a ex:NestedEntity;
@@ -563,7 +638,7 @@ function dataGenerator(
                     ` : "."}
 
                 <https://example.org/entity/Entity_B> a ex:Entity;
-                ${includeAllProps ? `
+                ${props.includeAllProps ? `
                     ex:prop1 "some value";
                     ex:prop2 [
                         a ex:NestedEntity;
