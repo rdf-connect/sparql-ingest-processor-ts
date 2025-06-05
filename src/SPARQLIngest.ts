@@ -145,7 +145,6 @@ export async function sparqlIngest(
 
             // Variable that will hold the full query to be executed
             let query;
-            let queryType;
 
             if (config.changeSemantics) {
                 if (transactionMembers.length > 0) {
@@ -170,15 +169,12 @@ export async function sparqlIngest(
                     if (ctv.object.value === config.changeSemantics.createValue) {
                         logger.info(`Preparing 'INSERT DATA {}' SPARQL query for member ${memberIRI.value}`);
                         query = CREATE(store, ng);
-                        queryType = "CREATE";
                     } else if (ctv.object.value === config.changeSemantics.updateValue) {
                         logger.info(`Preparing 'DELETE {} INSERT {} WHERE {}' SPARQL query for member ${memberIRI.value}`);
                         query = UPDATE(store, ng);
-                        queryType = "UPDATE";
                     } else if (ctv.object.value === config.changeSemantics.deleteValue) {
                         logger.info(`Preparing 'DELETE WHERE {}' SPARQL query for member ${memberIRI.value}`);
                         query = DELETE(store, [memberIRI.value], config.memberShapes, ng);
-                        queryType = "DELETE";
                     } else {
                         throw new Error(`[sparqlIngest] Unrecognized change type value: ${ctv.object.value}`);
                     }
