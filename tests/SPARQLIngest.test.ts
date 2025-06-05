@@ -97,7 +97,7 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         await ingestPromise;
     });
 
-    test("Default SDS Member DELETE/INSERT into a SPARQL endpoint", async () => {
+    test("Default SDS Member DELETE/INSERT into a populated SPARQL endpoint", async () => {
         const memberStream = new SimpleStream<string>();
         const sparqlWriter = new SimpleStream<string>();
         const config: IngestConfig = {
@@ -107,6 +107,80 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         // Add some data to the triple store first
         const localStore = RdfStore.createDefault();
         new Parser().parse(dataGenerator({ includeAllProps: true })).forEach(quad => localStore.addQuad(quad));
+        const myEngine = new QueryEngine();
+
+        const ingestPromise = new Promise<void>(resolve => {
+            sparqlWriter.data(async query => {
+                // Execute produced SPARQL query
+                await myEngine.queryVoid(query, {
+                    sources: [localStore],
+                });
+
+                // Query the triple store to verify that triples were updated properly
+                const stream = await myEngine.queryBindings("SELECT * WHERE { ?s ?p ?o }", {
+                    sources: [localStore],
+                });
+
+                let sawEntity = false;
+                let sawProp2 = false;
+                let sawNestedType = false;
+                let sawNewProp = false;
+
+                stream.on("data", (bindings: Bindings) => {
+                    const s = bindings.get("s");
+                    const p = bindings.get("p");
+                    const o = bindings.get("o");
+
+                    if (s?.value === "https://example.org/entity/Entity_0") {
+                        sawEntity = true;
+                    }
+                    if (p?.value === "https://example.org/ns#prop2") {
+                        sawProp2 = true;
+                    }
+                    if (p?.value === "https://example.org/ns#newProp") {
+                        sawNewProp = true;
+                    }
+                    if (o?.value === "https://example.org/ns#NestedEntity") {
+                        sawNestedType = true;
+                    }
+                }).on("end", () => {
+                    expect(sawEntity).toBeTruthy();
+                    expect(sawProp2).toBeTruthy();
+                    expect(sawNewProp).toBeTruthy();
+                    expect(sawNestedType).toBeTruthy();
+                    resolve();
+                });
+            });
+        });
+
+        // Execute processor function
+        await sparqlIngest(memberStream, config, sparqlWriter);
+
+        // Prepare updated member
+        const store = RdfStore.createDefault();
+        new Parser().parse(dataGenerator({ withMetadata: true, includeAllProps: true }))
+            .forEach(quad => store.addQuad(quad));
+        store.addQuad(
+            df.quad(
+                df.namedNode("https://example.org/entity/Entity_0"),
+                df.namedNode("https://example.org/ns#newProp"),
+                df.literal("Updated value")
+            )
+        );
+
+        await memberStream.push(new N3Writer().quadsToString(store.getQuads()));
+
+        await ingestPromise;
+    });
+
+    test("Default SDS Member DELETE/INSERT into an empty SPARQL endpoint", async () => {
+        const memberStream = new SimpleStream<string>();
+        const sparqlWriter = new SimpleStream<string>();
+        const config: IngestConfig = {
+            memberIsGraph: false
+        };
+
+        const localStore = RdfStore.createDefault();
         const myEngine = new QueryEngine();
 
         const ingestPromise = new Promise<void>(resolve => {

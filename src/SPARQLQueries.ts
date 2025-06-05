@@ -19,7 +19,7 @@ export const CREATE = (store: RdfStore, namedGraph?: string, multipleNamedGraphs
 
 export const UPDATE = (store: RdfStore, namedGraph?: string, multipleNamedGraphs?: boolean): string => {
     // TODO: Handle case of multiple members being Named Graphs
-    const formattedQuery = formatDeleteQuery(store);
+    const formattedQuery = formatQuery(store);
     const content = new N3Writer().quadsToString(store.getQuads(null, null, null, null));
     return `
         ${namedGraph ? `WITH <${namedGraph}>` : ""}
@@ -31,6 +31,27 @@ export const UPDATE = (store: RdfStore, namedGraph?: string, multipleNamedGraphs
         }
         WHERE { 
             ${formattedQuery[0]} 
+        }
+    `;
+};
+
+// We have to use a multiple query request of a DELETE WHERE and a INSERT DATA for the default update operation
+// because some triple stores like Virtuoso fail on executing a DELETE INSERT WHERE when there is no data to delete. 
+export const DEFAULT_UPDATE = (store: RdfStore, namedGraph?: string, multipleNamedGraphs?: boolean): string => {
+    // TODO: Handle case of multiple members being Named Graphs
+    const formattedQuery = formatQuery(store);
+    const content = new N3Writer().quadsToString(store.getQuads(null, null, null, null));
+    return `
+        ${namedGraph ? `WITH <${namedGraph}>` : ""}
+        DELETE { 
+            ${formattedQuery[0]} 
+        }
+        WHERE { 
+            ${formattedQuery[0]} 
+        };
+        ${namedGraph ? `WITH <${namedGraph}>` : ""}
+        INSERT DATA { 
+            ${content} 
         }
     `;
 };
@@ -48,7 +69,7 @@ export const DELETE = (
 
     let indexStart = 0;
     for (const memberIRI of memberIRIs) {
-        const formatted = formatDeleteQuery(store, memberIRI, memberShapes, indexStart);
+        const formatted = formatQuery(store, memberIRI, memberShapes, indexStart);
         deleteBuilder.push(formatted.length > 1 ? formatted[1] : formatted[0]);
         whereBuilder.push(formatted[0]);
         indexStart++;
@@ -64,7 +85,7 @@ export const DELETE = (
     `;
 }
 
-function formatDeleteQuery(
+function formatQuery(
     memberStore: RdfStore,
     memberIRI?: string,
     memberShapes?: string[],

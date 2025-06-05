@@ -3,12 +3,11 @@ import { SDS } from "@treecg/types";
 import { DataFactory } from "rdf-data-factory";
 import { RdfStore } from "rdf-stores";
 import { Parser } from "n3";
-import { CREATE, UPDATE, DELETE } from "./SPARQLQueries";
+import { CREATE, UPDATE, DELETE, DEFAULT_UPDATE } from "./SPARQLQueries";
 import { 
     doSPARQLRequest, 
     sanitizeQuads, 
-    getObjects, 
-    getSubjects 
+    getObjects
 } from "./Utils";
 import { getLoggerFor } from "./LogUtil";
 
@@ -189,14 +188,14 @@ export async function sparqlIngest(
                     transactionMembers.forEach(ts => {
                         ts.store.getQuads(null, null, null, null).forEach(q => store.addQuad(q));
                     });
-                    logger.info(`Preparing 'DELETE {} INSERT {} WHERE {}' SPARQL query for transaction member ${memberIRI.value}`);
-                    query = UPDATE(store, config.targetNamedGraph);
+                    logger.info(`Preparing 'DELETE {} WHERE {} + INSERT DATA {}' SPARQL query for transaction member ${memberIRI.value}`);
+                    query = DEFAULT_UPDATE(store, config.targetNamedGraph);
                 } else {
                     // Determine if we have a named graph (either explicitly configure or as the member itself)
                     const ng = getNamedGraphIfAny(memberIRI, config.memberIsGraph, config.targetNamedGraph);
                     // No change semantics are provided so we do a DELETE/INSERT query by default
-                    logger.info(`Preparing 'DELETE {} INSERT {} WHERE {}' SPARQL query for member ${memberIRI.value}`);
-                    query = UPDATE(store, ng);
+                    logger.info(`Preparing 'DELETE {} WHERE {} + INSERT DATA {}' SPARQL query for member ${memberIRI.value}`);
+                    query = DEFAULT_UPDATE(store, ng);
                 }
             }
 
@@ -205,7 +204,7 @@ export async function sparqlIngest(
                 logger.debug(`Generated SPARQL query: \n${query}`);
                 if (config.graphStoreUrl) {
                    await doSPARQLRequest(query, config.graphStoreUrl);
-                   logger.info(`Executed ${queryType} on remote SPARQL server ${config.graphStoreUrl} - ${new Date().toISOString()}`);
+                   logger.info(`Executed query on remote SPARQL server ${config.graphStoreUrl}`);
                 }
 
                 if (sparqlWriter) {
