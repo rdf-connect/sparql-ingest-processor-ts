@@ -1,6 +1,7 @@
 import { XSD } from "@treecg/types";
 import { DataFactory } from "rdf-data-factory";
 import { RdfStore } from "rdf-stores";
+import { getLoggerFor } from "./LogUtil";
 
 import type { Term, Quad_Subject, Quad_Object } from "@rdfjs/types";
 
@@ -47,16 +48,22 @@ export function sanitizeQuads(store: RdfStore): void {
 }
 
 export async function doSPARQLRequest(query: string, url: string): Promise<void> {
-    const res = await fetch(url, {
-        method: "POST",
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        },
-        body: `update=${fixedEncodeURIComponent(query)}`
-    });
+    const logger = getLoggerFor("doSPARQLRequest");
+    try {
+        const res = await fetch(url, {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            },
+            body: `update=${fixedEncodeURIComponent(query)}`
+        });
 
-    if (!res.ok) {
-        throw new Error(`HTTP request failed with code ${res.status} and message: \n${await res.text()}`);
+        if (!res.ok) {
+            throw new Error(`HTTP request failed with code ${res.status} and message: \n${await res.text()}`);
+        }
+    } catch (err: unknown) {
+        logger.error(`Error while executing SPARQL request: ${(<Error>err).message}`);
+        throw err;
     }
 }
 
