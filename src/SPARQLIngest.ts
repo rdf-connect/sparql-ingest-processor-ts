@@ -15,6 +15,7 @@ import type { Quad_Subject, Term } from "@rdfjs/types";
 
 const df = new DataFactory();
 
+// TODO: This should be obtained from an SDS metadata stream
 export type ChangeSemantics = {
     changeTypePath: string;
     createValue: string;
@@ -22,6 +23,7 @@ export type ChangeSemantics = {
     deleteValue: string;
 };
 
+// TODO: This should be obtained from an SDS metadata stream
 export type TransactionConfig = {
     transactionIdPath: string;
     transactionEndPath: string;
