@@ -3,7 +3,7 @@ import { SDS } from "@treecg/types";
 import { DataFactory } from "rdf-data-factory";
 import { RdfStore } from "rdf-stores";
 import { Parser } from "n3";
-import { CREATE, UPDATE, DELETE, DEFAULT_UPDATE } from "./SPARQLQueries";
+import { CREATE, UPDATE, DELETE } from "./SPARQLQueries";
 import { 
     doSPARQLRequest, 
     sanitizeQuads, 
@@ -185,13 +185,13 @@ export async function sparqlIngest(
                         ts.store.getQuads(null, null, null, null).forEach(q => store.addQuad(q));
                     });
                     logger.info(`Preparing 'DELETE {} WHERE {} + INSERT DATA {}' SPARQL query for transaction member ${memberIRI.value}`);
-                    query = DEFAULT_UPDATE(store, config.targetNamedGraph);
+                    query = UPDATE(store, config.targetNamedGraph);
                 } else {
                     // Determine if we have a named graph (either explicitly configure or as the member itself)
                     const ng = getNamedGraphIfAny(memberIRI, config.memberIsGraph, config.targetNamedGraph);
                     // No change semantics are provided so we do a DELETE/INSERT query by default
                     logger.info(`Preparing 'DELETE {} WHERE {} + INSERT DATA {}' SPARQL query for member ${memberIRI.value}`);
-                    query = DEFAULT_UPDATE(store, ng);
+                    query = UPDATE(store, ng);
                 }
             }
 

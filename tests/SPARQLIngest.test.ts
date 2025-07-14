@@ -1,4 +1,5 @@
 import { describe, test, expect } from "vitest";
+import { readFile } from "fs/promises";
 import { SimpleStream } from "@rdfc/js-runner";
 import { DataFactory } from "rdf-data-factory";
 import { RdfStore } from "rdf-stores";
@@ -167,7 +168,6 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
                 df.literal("Updated value")
             )
         );
-
         await memberStream.push(new N3Writer().quadsToString(store.getQuads()));
 
         await ingestPromise;
@@ -243,6 +243,47 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         );
 
         await memberStream.push(new N3Writer().quadsToString(store.getQuads()));
+
+        await ingestPromise;
+    });
+
+    test("Default SDS Member DELETE/INSERT into an empty SPARQL endpoint having a large member insert", async () => {
+        const memberStream = new SimpleStream<string>();
+        const sparqlWriter = new SimpleStream<string>();
+        const config: IngestConfig = {
+            memberIsGraph: false
+        };
+
+        const localStore = RdfStore.createDefault();
+        const myEngine = new QueryEngine();
+
+        const ingestPromise = new Promise<void>(resolve => {
+            sparqlWriter.data(async query => {
+                // Check the query was splited properly
+                expect(query.split("INSERT DATA").length).toBe(5)
+                // Execute produced SPARQL query
+                await myEngine.queryVoid(query, {
+                    sources: [localStore],
+                });
+                // Query the triple store to verify that triples were updated properly
+                const stream = await myEngine.queryBindings("SELECT (COUNT(*) AS ?count) WHERE { ?s ?p ?o }", {
+                    sources: [localStore],
+                });
+
+                stream.on("data", (bindings: Bindings) => {
+                    const count = bindings.get("count");
+                    expect(parseInt(count!.value)).toBe(1828);
+                }).on("end", () => {
+                    resolve();
+                });
+            });
+        });
+
+        // Execute processor function
+        await sparqlIngest(memberStream, config, sparqlWriter);
+
+        // Read large member from disk
+        await memberStream.push(await readFile("./tests/data/large-member.nq", "utf-8"));
 
         await ingestPromise;
     });
