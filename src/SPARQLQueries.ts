@@ -3,35 +3,58 @@ import { RDF, SHACL } from "@treecg/types";
 import { Writer as N3Writer, Parser } from "n3"
 import { RdfStore } from "rdf-stores";
 import { DataFactory } from "rdf-data-factory";
-import { getObjects, getSubjects } from "./Utils";
+import { getObjects, getSubjects, splitStore } from "./Utils";
 
 const df = new DataFactory();
 
 export const CREATE = (store: RdfStore, namedGraph?: string, multipleNamedGraphs?: boolean): string => {
     // TODO: Handle case of multiple members being Named Graphs
-    const content = new N3Writer().quadsToString(store.getQuads(null, null, null, null));
+    
+    // Split the query into multiple queries to avoid query length limits 
+    // (such as the 10000 SQL code lines in Virtuoso) for large inserts.
+    // 500 is an empirically obtained value to avoid exceeding the 10000 lines limit in Virtuoso
+    const stores = splitStore(store, 500);
+
     return `
-        INSERT DATA {
-            ${namedGraph ? `GRAPH <${namedGraph}> {${content}}` : `${content}`} 
-        }
+        ${stores.map((subStore, i) => {
+            return `
+                ${namedGraph ? `WITH <${namedGraph}>` : ""}
+                INSERT DATA { 
+                    ${new N3Writer().quadsToString(subStore.getQuads())} 
+                }
+                ${i === stores.length - 1 ? "" : ";"}
+            `;
+        }).join("\n")}
     `;
 };
 
+// We have to use a multiple query request of a DELETE WHERE + INSERT DATA for the default update operation
+// because some triple stores like Virtuoso fail on executing a DELETE INSERT WHERE when there is no data to delete.
 export const UPDATE = (store: RdfStore, namedGraph?: string, multipleNamedGraphs?: boolean): string => {
     // TODO: Handle case of multiple members being Named Graphs
-    const formattedQuery = formatDeleteQuery(store);
-    const content = new N3Writer().quadsToString(store.getQuads(null, null, null, null));
+    const formattedQuery = formatQuery(store);
+
+    // Split the query into multiple queries to avoid query length limits 
+    // (such as the 10000 SQL code lines in Virtuoso) for large inserts.
+    // 500 is an empirically obtained value to avoid exceeding the 10000 lines limit in Virtuoso
+    const stores = splitStore(store, 500);
     return `
         ${namedGraph ? `WITH <${namedGraph}>` : ""}
         DELETE { 
             ${formattedQuery[0]} 
         }
-        INSERT { 
-            ${content} 
-        }
         WHERE { 
             ${formattedQuery[0]} 
-        }
+        };
+        ${stores.map((subStore, i) => {
+            return `
+                ${namedGraph ? `WITH <${namedGraph}>` : ""}
+                INSERT DATA { 
+                    ${new N3Writer().quadsToString(subStore.getQuads())} 
+                }
+                ${i === stores.length - 1 ? "" : ";"}
+            `;
+        }).join("\n")}
     `;
 };
 
@@ -48,7 +71,7 @@ export const DELETE = (
 
     let indexStart = 0;
     for (const memberIRI of memberIRIs) {
-        const formatted = formatDeleteQuery(store, memberIRI, memberShapes, indexStart);
+        const formatted = formatQuery(store, memberIRI, memberShapes, indexStart);
         deleteBuilder.push(formatted.length > 1 ? formatted[1] : formatted[0]);
         whereBuilder.push(formatted[0]);
         indexStart++;
@@ -64,7 +87,7 @@ export const DELETE = (
     `;
 }
 
-function formatDeleteQuery(
+function formatQuery(
     memberStore: RdfStore,
     memberIRI?: string,
     memberShapes?: string[],
@@ -80,7 +103,7 @@ function formatDeleteQuery(
     // and we use them to define its DELETE query pattern.
     if (!memberShapes || memberShapes.length === 0) {
         // Iterate over every BGP of the member to define a deletion pattern
-        for (const quad of memberStore.getQuads(null, null, null, null)) {
+        for (const quad of memberStore.getQuads()) {
             if (!subjectSet.has(quad.subject.value)) {
                 // Make sure every subject is processed only once
                 subjectSet.add(quad.subject.value);
@@ -89,9 +112,13 @@ function formatDeleteQuery(
                     queryBuilder.push(`<${quad.subject.value}> ?p_${i} ?o_${i}.`);
                 } else if (quad.subject.termType === "BlankNode") {
                     // Define a pattern that covers the referencing BGP and every property and value of blank nodes
-                    const bnQ = memberStore.getQuads(null, null, quad.subject, null)[0];
-                    queryBuilder.push(`<${bnQ.subject.value}> <${bnQ.predicate.value}> ?bn_${i}.`);
-                    queryBuilder.push(`?bn_${i} ?p_${i} ?o${i}.`);
+                    queryBuilder.push(`?bn_${i} <${quad.predicate.value}> ${
+                        quad.object.termType === "Literal" ? `"${quad.object.value}"^^<${quad.object.datatype.value}>` 
+                        : quad.object.termType === "BlankNode" ? `?bn_ref_${i}` 
+                        : `<${quad.object.value}>`
+                    }.`);
+                    queryBuilder.push(`?bn_${i} ?p_${i} ?o_${i}.`);
+                    queryBuilder.push(`?s_ref_${i} ?p_ref_${i} ?bn_${i}.`);
                 }
                 i++;
             }
@@ -113,7 +140,7 @@ function formatDeleteQuery(
         // for a specific shape, based on the sh:targetClass.
         // Otherwise we have to include all shapes in the query pattern because we don't know
         // exactly which is the shape of the received member.
-        const memberType = getObjects(memberStore, df.namedNode(memberIRI!), RDF.terms.type, null)[0];
+        const memberType = getObjects(memberStore, df.namedNode(memberIRI!), RDF.terms.type)[0];
         if (memberType) {
             i++;
             const mshStore = shapeIndex.get(memberType.value);

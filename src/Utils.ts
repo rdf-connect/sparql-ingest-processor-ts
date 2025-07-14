@@ -1,8 +1,9 @@
 import { XSD } from "@treecg/types";
 import { DataFactory } from "rdf-data-factory";
 import { RdfStore } from "rdf-stores";
+import { getLoggerFor } from "./LogUtil";
 
-import type { Term, Quad_Subject, Quad_Object } from "@rdfjs/types";
+import type { Term, Quad, Quad_Subject, Quad_Object } from "@rdfjs/types";
 
 const df = new DataFactory();
 
@@ -28,6 +29,66 @@ export function getObjects(
     });
 }
 
+/**
+ * Splits a given RDF store into multiple stores, each containing a given maximum of quads.
+ * This is useful for avoiding issues with large SPARQL updates that exceed the limits of some triple stores.
+ *
+ * @param store - The RDF store to split.
+ * @param threshold - The maximum number of quads per store.
+ * @returns An array of RDF stores, each containing up to the specified number of quads.
+ */
+export function splitStore(store: RdfStore, threshold: number): RdfStore[] {
+    const stores: RdfStore[] = [];
+
+    if (store.size < threshold) {
+        stores.push(store);
+    } else {
+        const quads = store.getQuads();
+        const bnSet = new Set<string>();
+        let subStore = RdfStore.createDefault();
+
+        // Split the store into chunks containing a maximum of quads given by `threshold`.
+        for (let i = 0; i < quads.length; i++) {
+            if (bnSet.has(`${quads[i].subject.value}${quads[i].predicate.value}${quads[i].object.value}${quads[i].graph.value}`)) {
+                // Skip quads referencing blank nodes that have already been added to a subStore
+                continue;
+            }
+
+            // Create a new subStore if the current one has reached the threshold
+            if (subStore.size >= threshold) {
+                stores.push(subStore);
+                subStore = RdfStore.createDefault();
+            }
+
+            // Make sure all blank nodes quads are in the same store.
+            if (quads[i].subject.termType === "BlankNode") {
+                const subjectQuads = store.getQuads(quads[i].subject);
+                const objectQuads = store.getQuads(null, null, quads[i].subject);
+
+                [...subjectQuads, ...objectQuads].forEach((q) => {
+                    subStore.addQuad(q);
+                    bnSet.add(`${q.subject.value}${q.predicate.value}${q.object.value}${q.graph.value}`);
+                });
+            }
+            if (quads[i].object.termType === "BlankNode") {
+                const subjectQuads = store.getQuads(quads[i].object);
+                const objectQuads = store.getQuads(null, null, quads[i].object);
+
+                [...subjectQuads, ...objectQuads].forEach((q) => {
+                    subStore.addQuad(q);
+                    bnSet.add(`${q.subject.value}${q.predicate.value}${q.object.value}${q.graph.value}`);
+                });
+            }
+
+            // Add the quad to the current subStore
+            subStore.addQuad(quads[i]);
+        }
+        // Add the last subStore
+        stores.push(subStore);
+    }
+    return stores;
+}
+
 export function sanitizeQuads(store: RdfStore): void {
     for (const q of store.getQuads()) {
         // There is an issue with triples like <a> <b> +30.
@@ -47,16 +108,22 @@ export function sanitizeQuads(store: RdfStore): void {
 }
 
 export async function doSPARQLRequest(query: string, url: string): Promise<void> {
-    const res = await fetch(url, {
-        method: "POST",
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        },
-        body: `update=${fixedEncodeURIComponent(query)}`
-    });
+    const logger = getLoggerFor("doSPARQLRequest");
+    try {
+        const res = await fetch(url, {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            },
+            body: `update=${fixedEncodeURIComponent(query)}`
+        });
 
-    if (!res.ok) {
-        throw new Error(`HTTP request failed with code ${res.status} and message: \n${await res.text()}`);
+        if (!res.ok) {
+            throw new Error(`HTTP request failed with code ${res.status} and message: \n${await res.text()}`);
+        }
+    } catch (err: unknown) {
+        logger.error(`Error while executing SPARQL request: ${(<Error>err).message}`);
+        throw err;
     }
 }
 

@@ -7,8 +7,7 @@ import { CREATE, UPDATE, DELETE } from "./SPARQLQueries";
 import { 
     doSPARQLRequest, 
     sanitizeQuads, 
-    getObjects, 
-    getSubjects 
+    getObjects
 } from "./Utils";
 import { getLoggerFor } from "./LogUtil";
 
@@ -16,6 +15,7 @@ import type { Quad_Subject, Term } from "@rdfjs/types";
 
 const df = new DataFactory();
 
+// TODO: This should be obtained from an SDS metadata stream
 export type ChangeSemantics = {
     changeTypePath: string;
     createValue: string;
@@ -23,6 +23,7 @@ export type ChangeSemantics = {
     deleteValue: string;
 };
 
+// TODO: This should be obtained from an SDS metadata stream
 export type TransactionConfig = {
     transactionIdPath: string;
     transactionEndPath: string;
@@ -146,7 +147,6 @@ export async function sparqlIngest(
 
             // Variable that will hold the full query to be executed
             let query;
-            let queryType;
 
             if (config.changeSemantics) {
                 if (transactionMembers.length > 0) {
@@ -171,15 +171,12 @@ export async function sparqlIngest(
                     if (ctv.object.value === config.changeSemantics.createValue) {
                         logger.info(`Preparing 'INSERT DATA {}' SPARQL query for member ${memberIRI.value}`);
                         query = CREATE(store, ng);
-                        queryType = "CREATE";
                     } else if (ctv.object.value === config.changeSemantics.updateValue) {
                         logger.info(`Preparing 'DELETE {} INSERT {} WHERE {}' SPARQL query for member ${memberIRI.value}`);
                         query = UPDATE(store, ng);
-                        queryType = "UPDATE";
                     } else if (ctv.object.value === config.changeSemantics.deleteValue) {
                         logger.info(`Preparing 'DELETE WHERE {}' SPARQL query for member ${memberIRI.value}`);
                         query = DELETE(store, [memberIRI.value], config.memberShapes, ng);
-                        queryType = "DELETE";
                     } else {
                         throw new Error(`[sparqlIngest] Unrecognized change type value: ${ctv.object.value}`);
                     }
@@ -189,13 +186,13 @@ export async function sparqlIngest(
                     transactionMembers.forEach(ts => {
                         ts.store.getQuads(null, null, null, null).forEach(q => store.addQuad(q));
                     });
-                    logger.info(`Preparing 'DELETE {} INSERT {} WHERE {}' SPARQL query for transaction member ${memberIRI.value}`);
+                    logger.info(`Preparing 'DELETE {} WHERE {} + INSERT DATA {}' SPARQL query for transaction member ${memberIRI.value}`);
                     query = UPDATE(store, config.targetNamedGraph);
                 } else {
                     // Determine if we have a named graph (either explicitly configure or as the member itself)
                     const ng = getNamedGraphIfAny(memberIRI, config.memberIsGraph, config.targetNamedGraph);
                     // No change semantics are provided so we do a DELETE/INSERT query by default
-                    logger.info(`Preparing 'DELETE {} INSERT {} WHERE {}' SPARQL query for member ${memberIRI.value}`);
+                    logger.info(`Preparing 'DELETE {} WHERE {} + INSERT DATA {}' SPARQL query for member ${memberIRI.value}`);
                     query = UPDATE(store, ng);
                 }
             }
@@ -205,7 +202,7 @@ export async function sparqlIngest(
                 logger.debug(`Generated SPARQL query: \n${query}`);
                 if (config.graphStoreUrl) {
                    await doSPARQLRequest(query, config.graphStoreUrl);
-                   logger.info(`Executed ${queryType} on remote SPARQL server ${config.graphStoreUrl} - ${new Date().toISOString()}`);
+                   logger.info(`Executed query on remote SPARQL server ${config.graphStoreUrl}`);
                 }
 
                 if (sparqlWriter) {
