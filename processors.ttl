@@ -85,6 +85,12 @@ js:SPARQLIngest a js:JsProcess;
     sh:name "graphStoreUrl";
     sh:maxCount 1;
     sh:minCount 0;
+  ], [
+    sh:path js:maxQueryLength;
+    sh:datatype xsd:integer;
+    sh:name "maxQueryLength";
+    sh:maxCount 1;
+    sh:minCount 0;
   ].
 
 [ ] a sh:NodeShape;

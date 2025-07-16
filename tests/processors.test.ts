@@ -41,7 +41,8 @@ describe("Tests for SPARQL ingest processor", async () => {
                         js:transactionIdPath "http://ex.org/transactionId";
                         js:transactionEndPath "http://ex.org/transactionEnd"
                     ];
-                    js:graphStoreUrl "http://ex.org/myGraphStore"
+                    js:graphStoreUrl "http://ex.org/myGraphStore";
+                    js:maxQueryLength 1000
                 ];
                 js:sparqlWriter <jw>.
         `;
@@ -75,6 +76,7 @@ describe("Tests for SPARQL ingest processor", async () => {
         expect(ingestConfig.transactionConfig.transactionIdPath).toBe("http://ex.org/transactionId");
         expect(ingestConfig.transactionConfig.transactionEndPath).toBe("http://ex.org/transactionEnd");
         expect(ingestConfig.graphStoreUrl).toBe("http://ex.org/myGraphStore");
+        expect(ingestConfig.maxQueryLength).toBe(1000);
         testWriter(sparqlWriter);
 
         await checkProc(env.file, env.func);
