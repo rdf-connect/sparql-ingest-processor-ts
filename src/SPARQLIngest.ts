@@ -31,6 +31,7 @@ export type TransactionConfig = {
 
 export type IngestConfig = {
     memberIsGraph: boolean;
+    maxQueryLength: number;
     memberShapes?: string[]; // TODO: This should be obtained from an SDS metadata stream
     changeSemantics?: ChangeSemantics;
     targetNamedGraph?: string;
@@ -170,10 +171,10 @@ export async function sparqlIngest(
                     // Assemble corresponding SPARQL UPDATE query
                     if (ctv.object.value === config.changeSemantics.createValue) {
                         logger.info(`Preparing 'INSERT DATA {}' SPARQL query for member ${memberIRI.value}`);
-                        query = CREATE(store, ng);
+                        query = CREATE(store, config.maxQueryLength, ng);
                     } else if (ctv.object.value === config.changeSemantics.updateValue) {
                         logger.info(`Preparing 'DELETE {} INSERT {} WHERE {}' SPARQL query for member ${memberIRI.value}`);
-                        query = UPDATE(store, ng);
+                        query = UPDATE(store, config.maxQueryLength, ng);
                     } else if (ctv.object.value === config.changeSemantics.deleteValue) {
                         logger.info(`Preparing 'DELETE WHERE {}' SPARQL query for member ${memberIRI.value}`);
                         query = DELETE(store, [memberIRI.value], config.memberShapes, ng);
@@ -187,13 +188,13 @@ export async function sparqlIngest(
                         ts.store.getQuads(null, null, null, null).forEach(q => store.addQuad(q));
                     });
                     logger.info(`Preparing 'DELETE {} WHERE {} + INSERT DATA {}' SPARQL query for transaction member ${memberIRI.value}`);
-                    query = UPDATE(store, config.targetNamedGraph);
+                    query = UPDATE(store, config.maxQueryLength, config.targetNamedGraph);
                 } else {
                     // Determine if we have a named graph (either explicitly configure or as the member itself)
                     const ng = getNamedGraphIfAny(memberIRI, config.memberIsGraph, config.targetNamedGraph);
                     // No change semantics are provided so we do a DELETE/INSERT query by default
                     logger.info(`Preparing 'DELETE {} WHERE {} + INSERT DATA {}' SPARQL query for member ${memberIRI.value}`);
-                    query = UPDATE(store, ng);
+                    query = UPDATE(store, config.maxQueryLength, ng);
                 }
             }
 
@@ -285,10 +286,10 @@ function createTransactionQueries(
 
     // Build multi-operation SPARQL query
     if (createStore.size > 0) {
-        transactionQueryBuilder.push(CREATE(createStore, config.targetNamedGraph));
+        transactionQueryBuilder.push(CREATE(createStore, config.maxQueryLength, config.targetNamedGraph));
     }
     if (updateStore.size > 0) {
-        transactionQueryBuilder.push(UPDATE(updateStore, config.targetNamedGraph));
+        transactionQueryBuilder.push(UPDATE(updateStore, config.maxQueryLength, config.targetNamedGraph));
     }
     if (updateStore.size > 0) {
         transactionQueryBuilder.push(DELETE(

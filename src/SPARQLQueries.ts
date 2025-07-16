@@ -7,13 +7,18 @@ import { getObjects, getSubjects, splitStore } from "./Utils";
 
 const df = new DataFactory();
 
-export const CREATE = (store: RdfStore, namedGraph?: string, multipleNamedGraphs?: boolean): string => {
+export const CREATE = (
+    store: RdfStore, 
+    maxQueryLength = 500, 
+    namedGraph?: string, 
+    multipleNamedGraphs?: boolean
+): string => {
     // TODO: Handle case of multiple members being Named Graphs
     
     // Split the query into multiple queries to avoid query length limits 
     // (such as the 10000 SQL code lines in Virtuoso) for large inserts.
     // 500 is an empirically obtained value to avoid exceeding the 10000 lines limit in Virtuoso
-    const stores = splitStore(store, 500);
+    const stores = splitStore(store, maxQueryLength);
 
     return `
         ${stores.map((subStore, i) => {
@@ -30,14 +35,19 @@ export const CREATE = (store: RdfStore, namedGraph?: string, multipleNamedGraphs
 
 // We have to use a multiple query request of a DELETE WHERE + INSERT DATA for the default update operation
 // because some triple stores like Virtuoso fail on executing a DELETE INSERT WHERE when there is no data to delete.
-export const UPDATE = (store: RdfStore, namedGraph?: string, multipleNamedGraphs?: boolean): string => {
+export const UPDATE = (
+    store: RdfStore,
+    maxQueryLength = 500,
+    namedGraph?: string, 
+    multipleNamedGraphs?: boolean
+): string => {
     // TODO: Handle case of multiple members being Named Graphs
     const formattedQuery = formatQuery(store);
 
     // Split the query into multiple queries to avoid query length limits 
     // (such as the 10000 SQL code lines in Virtuoso) for large inserts.
     // 500 is an empirically obtained value to avoid exceeding the 10000 lines limit in Virtuoso
-    const stores = splitStore(store, 500);
+    const stores = splitStore(store, maxQueryLength);
     return `
         ${namedGraph ? `WITH <${namedGraph}>` : ""}
         DELETE { 
