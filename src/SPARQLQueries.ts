@@ -23,9 +23,10 @@ export const CREATE = (
     return `
         ${stores.map((subStore, i) => {
             return `
-                ${namedGraph ? `WITH <${namedGraph}>` : ""}
-                INSERT DATA { 
-                    ${new N3Writer().quadsToString(subStore.getQuads())} 
+                INSERT DATA {
+                    ${namedGraph ? `GRAPH <${namedGraph}> {` : ""}
+                        ${new N3Writer().quadsToString(subStore.getQuads())}
+                    ${namedGraph ? `}` : ""}
                 }
                 ${i === stores.length - 1 ? "" : ";"}
             `;
@@ -58,9 +59,10 @@ export const UPDATE = (
         };
         ${stores.map((subStore, i) => {
             return `
-                ${namedGraph ? `WITH <${namedGraph}>` : ""}
-                INSERT DATA { 
-                    ${new N3Writer().quadsToString(subStore.getQuads())} 
+                INSERT DATA {
+                    ${namedGraph ? `GRAPH <${namedGraph}> {` : ""}
+                        ${new N3Writer().quadsToString(subStore.getQuads())}
+                    ${namedGraph ? `}` : ""}
                 }
                 ${i === stores.length - 1 ? "" : ";"}
             `;
