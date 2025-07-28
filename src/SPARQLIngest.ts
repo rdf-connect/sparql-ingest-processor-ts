@@ -37,6 +37,7 @@ export type IngestConfig = {
     targetNamedGraph?: string;
     transactionConfig?: TransactionConfig;
     graphStoreUrl?: string;
+    accessToken?: string; // For SPARQL endpoints that require authentication like Qlever
 };
 
 export type TransactionMember = {
@@ -202,7 +203,7 @@ export async function sparqlIngest(
             if (query) {
                 logger.debug(`Generated SPARQL query: \n${query}`);
                 if (config.graphStoreUrl) {
-                   await doSPARQLRequest(query, config.graphStoreUrl);
+                   await doSPARQLRequest(query, config);
                    logger.info(`Executed query on remote SPARQL server ${config.graphStoreUrl}`);
                 }
 
