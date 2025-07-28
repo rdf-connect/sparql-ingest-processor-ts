@@ -116,8 +116,7 @@ export async function doSPARQLRequest(query: string, config: IngestConfig): Prom
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
             },
-            body: `update=${fixedEncodeURIComponent(query)}
-                ${config.accessToken ? `&access-token=${config.accessToken}` : ''}`,
+            body: `update=${fixedEncodeURIComponent(query)}${config.accessToken ? `&access-token=${config.accessToken}` : ''}`,
         });
 
         if (!res.ok) {
