@@ -3,7 +3,8 @@ import { DataFactory } from "rdf-data-factory";
 import { RdfStore } from "rdf-stores";
 import { getLoggerFor } from "./LogUtil";
 
-import type { Term, Quad, Quad_Subject, Quad_Object } from "@rdfjs/types";
+import type { Term, Quad_Subject, Quad_Object } from "@rdfjs/types";
+import type { IngestConfig } from "./SPARQLIngest";
 
 const df = new DataFactory();
 
@@ -107,15 +108,16 @@ export function sanitizeQuads(store: RdfStore): void {
     }
 }
 
-export async function doSPARQLRequest(query: string, url: string): Promise<void> {
+export async function doSPARQLRequest(query: string, config: IngestConfig): Promise<void> {
     const logger = getLoggerFor("doSPARQLRequest");
     try {
-        const res = await fetch(url, {
+        const res = await fetch(config.graphStoreUrl!, {
             method: "POST",
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
             },
-            body: `update=${fixedEncodeURIComponent(query)}`
+            body: `update=${fixedEncodeURIComponent(query)}
+                ${config.accessToken ? `&access-token=${config.accessToken}` : ''}`,
         });
 
         if (!res.ok) {
