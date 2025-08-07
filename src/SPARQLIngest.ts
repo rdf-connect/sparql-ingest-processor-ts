@@ -4,9 +4,9 @@ import { DataFactory } from "rdf-data-factory";
 import { RdfStore } from "rdf-stores";
 import { Parser } from "n3";
 import { CREATE, UPDATE, DELETE } from "./SPARQLQueries";
-import { 
-    doSPARQLRequest, 
-    sanitizeQuads, 
+import {
+    doSPARQLRequest,
+    sanitizeQuads,
     getObjects
 } from "./Utils";
 import { getLoggerFor } from "./LogUtil";
@@ -38,6 +38,7 @@ export type IngestConfig = {
     transactionConfig?: TransactionConfig;
     graphStoreUrl?: string;
     accessToken?: string; // For SPARQL endpoints that require authentication like Qlever
+    measurePerformance?: boolean; // If true, performance metrics will be logged
 };
 
 export type TransactionMember = {
@@ -53,6 +54,7 @@ export async function sparqlIngest(
 ) {
     const logger = getLoggerFor("sparqlIngest");
     let transactionMembers: TransactionMember[] = [];
+    const requestsPerformance: number[] = [];
 
     memberStream.data(async rawQuads => {
         logger.debug(`Raw member data received: \n${rawQuads}`);
@@ -75,9 +77,9 @@ export async function sparqlIngest(
             if (config.transactionConfig) {
                 // TODO: use rdf-lens to support complex paths
                 const transactionId = getObjects(
-                    store, 
-                    null, 
-                    df.namedNode(config.transactionConfig.transactionIdPath), 
+                    store,
+                    null,
+                    df.namedNode(config.transactionConfig.transactionIdPath),
                     null
                 )[0];
                 if (transactionId) {
@@ -90,8 +92,8 @@ export async function sparqlIngest(
                     // See if this is a finishing, new or ongoing transaction
                     // TODO: use rdf-lens to support complex paths
                     const isLastOfTransaction = getObjects(
-                        store, 
-                        null, 
+                        store,
+                        null,
                         df.namedNode(config.transactionConfig.transactionEndPath),
                         null
                     )[0];
@@ -100,8 +102,8 @@ export async function sparqlIngest(
                         logger.info(`Last member of ${transactionId.value} received!`);
                         // Check this transaction is correct
                         verifyTransaction(
-                            transactionMembers.map(ts => ts.store), 
-                            config.transactionConfig.transactionIdPath, 
+                            transactionMembers.map(ts => ts.store),
+                            config.transactionConfig.transactionIdPath,
                             transactionId
                         );
                         // Remove is-last-of-transaction flag
@@ -120,8 +122,8 @@ export async function sparqlIngest(
                     } else if (transactionMembers.length > 0) {
                         // Check this transaction is correct
                         verifyTransaction(
-                            transactionMembers.map(ts => ts.store), 
-                            config.transactionConfig.transactionIdPath, 
+                            transactionMembers.map(ts => ts.store),
+                            config.transactionConfig.transactionIdPath,
                             transactionId
                         );
                         // Is an ongoing transaction, so we add this member's quads into the transaction store
@@ -161,7 +163,7 @@ export async function sparqlIngest(
                     // Get the type of change
                     // TODO: use rdf-lens to support complex paths
                     const ctv = store.getQuads(
-                        null, 
+                        null,
                         df.namedNode(config.changeSemantics!.changeTypePath)
                     )[0];
                     // Remove change type quad from store
@@ -203,8 +205,13 @@ export async function sparqlIngest(
             if (query) {
                 logger.debug(`Generated SPARQL query: \n${query}`);
                 if (config.graphStoreUrl) {
-                   await doSPARQLRequest(query, config);
-                   logger.info(`Executed query on remote SPARQL server ${config.graphStoreUrl}`);
+                    const t0 = Date.now();
+                    await doSPARQLRequest(query, config);
+                    const reqTime = Date.now() - t0;
+                    if (config.measurePerformance) {
+                        requestsPerformance.push(reqTime);
+                    }
+                    logger.info(`Executed query on remote SPARQL server ${config.graphStoreUrl} (took ${reqTime} ms)`);
                 }
 
                 if (sparqlWriter) {
@@ -218,9 +225,14 @@ export async function sparqlIngest(
         }
     });
 
-    if (sparqlWriter) {
-        memberStream.on("end", async () => await sparqlWriter.end());
-    }
+    memberStream.on("end", async () => {
+        if (sparqlWriter) {
+            await sparqlWriter.end();
+        }
+        if (config.measurePerformance) {
+            console.log(requestsPerformance);
+        }
+    });
 }
 
 function verifyTransaction(stores: RdfStore[], transactionIdPath: string, transactionId: Term): void {

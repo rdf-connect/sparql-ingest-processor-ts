@@ -97,6 +97,12 @@ js:SPARQLIngest a js:JsProcess;
     sh:name "accessToken";
     sh:maxCount 1;
     sh:minCount 0;
+  ], [
+    sh:path js:measurePerformance;
+    sh:datatype xsd:boolean;
+    sh:name "measurePerformance";
+    sh:maxCount 1;
+    sh:minCount 0;
   ].
 
 [ ] a sh:NodeShape;
