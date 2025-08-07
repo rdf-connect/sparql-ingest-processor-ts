@@ -3,6 +3,7 @@ import { SDS } from "@treecg/types";
 import { DataFactory } from "rdf-data-factory";
 import { RdfStore } from "rdf-stores";
 import { Parser } from "n3";
+import { writeFile } from "fs/promises";
 import { CREATE, UPDATE, DELETE } from "./SPARQLQueries";
 import {
     doSPARQLRequest,
@@ -29,6 +30,11 @@ export type TransactionConfig = {
     transactionEndPath: string;
 };
 
+export type PerformanceConfig = {
+    name: string;
+    outputPath: string;
+};
+
 export type IngestConfig = {
     memberIsGraph: boolean;
     maxQueryLength: number;
@@ -38,7 +44,7 @@ export type IngestConfig = {
     transactionConfig?: TransactionConfig;
     graphStoreUrl?: string;
     accessToken?: string; // For SPARQL endpoints that require authentication like Qlever
-    measurePerformance?: boolean; // If true, performance metrics will be logged
+    measurePerformance?: PerformanceConfig;
 };
 
 export type TransactionMember = {
@@ -230,7 +236,11 @@ export async function sparqlIngest(
             await sparqlWriter.end();
         }
         if (config.measurePerformance) {
-            console.log(requestsPerformance);
+            await writeFile(
+                `${config.measurePerformance.outputPath}/${config.measurePerformance.name}.json`, 
+                JSON.stringify(requestsPerformance),
+                "utf-8"
+            );
         }
     });
 }

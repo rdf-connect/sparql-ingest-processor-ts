@@ -99,10 +99,26 @@ js:SPARQLIngest a js:JsProcess;
     sh:minCount 0;
   ], [
     sh:path js:measurePerformance;
-    sh:datatype xsd:boolean;
+    sh:class js:PerformanceConfig;
     sh:name "measurePerformance";
     sh:maxCount 1;
     sh:minCount 0;
+  ].
+
+[ ] a sh:NodeShape;
+  sh:targetClass js:PerformanceConfig;
+  sh:property [
+    sh:path js:name;
+    sh:datatype xsd:string;
+    sh:name "name";
+    sh:maxCount 1;
+    sh:minCount 1;
+  ], [
+    sh:path js:outputPath;
+    sh:datatype xsd:string;
+    sh:name "outputPath";
+    sh:maxCount 1;
+    sh:minCount 1;
   ].
 
 [ ] a sh:NodeShape;
