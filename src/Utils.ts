@@ -2,6 +2,7 @@ import { XSD } from "@treecg/types";
 import { DataFactory } from "rdf-data-factory";
 import { RdfStore } from "rdf-stores";
 import { getLoggerFor } from "./LogUtil";
+import { Agent } from "undici";
 
 import type { Term, Quad_Subject, Quad_Object } from "@rdfjs/types";
 import type { IngestConfig } from "./SPARQLIngest";
@@ -117,13 +118,18 @@ export async function doSPARQLRequest(query: string, config: IngestConfig): Prom
                 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
             },
             body: `update=${fixedEncodeURIComponent(query)}${config.accessToken ? `&access-token=${config.accessToken}` : ''}`,
+            // Increase the request timeout to 30 minutes to accomodate for slow SPARQL engines.
+            dispatcher: new Agent({
+                headersTimeout: 1800000,
+                bodyTimeout: 1800000,
+            }),
         });
 
         if (!res.ok) {
             throw new Error(`HTTP request failed with code ${res.status} and message: \n${await res.text()}`);
         }
     } catch (err: unknown) {
-        logger.error(`Error while executing SPARQL request: ${(<Error>err).message}`);
+        logger.error(`Error while executing SPARQL request: ${(<Error>err).message} - ${(<Error>err).cause}`);
         throw err;
     }
 }

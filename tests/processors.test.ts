@@ -43,7 +43,8 @@ describe("Tests for SPARQL ingest processor", async () => {
                     ];
                     js:graphStoreUrl "http://ex.org/myGraphStore";
                     js:maxQueryLength 1000;
-                    js:accessToken "someAccessToken"
+                    js:accessToken "someAccessToken";
+                    js:measurePerformance true
                 ];
                 js:sparqlWriter <jw>.
         `;
@@ -79,6 +80,7 @@ describe("Tests for SPARQL ingest processor", async () => {
         expect(ingestConfig.graphStoreUrl).toBe("http://ex.org/myGraphStore");
         expect(ingestConfig.maxQueryLength).toBe(1000);
         expect(ingestConfig.accessToken).toBe("someAccessToken");
+        expect(ingestConfig.measurePerformance).toBeTruthy();
         testWriter(sparqlWriter);
 
         await checkProc(env.file, env.func);
