@@ -28,6 +28,7 @@
         "n3": "^1.26.0",
         "rdf-data-factory": "^2.0.2",
         "rdf-stores": "^2.1.1",
+        "undici": "^7.13.0",
         "winston": "^3.17.0"
     },
     "devDependencies": {
