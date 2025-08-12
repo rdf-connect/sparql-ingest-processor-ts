@@ -109,24 +109,40 @@ export function sanitizeQuads(store: RdfStore): void {
     }
 }
 
-export async function doSPARQLRequest(query: string, config: IngestConfig): Promise<void> {
+export async function doSPARQLRequest(query: string[], config: IngestConfig): Promise<void> {
     const logger = getLoggerFor("doSPARQLRequest");
     try {
-        const res = await fetch(config.graphStoreUrl!, {
-            method: "POST",
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-            },
-            body: `update=${fixedEncodeURIComponent(query)}${config.accessToken ? `&access-token=${config.accessToken}` : ''}`,
-            // Increase the request timeout to 30 minutes to accomodate for slow SPARQL engines.
-            dispatcher: new Agent({
-                headersTimeout: 1800000,
-                bodyTimeout: 1800000,
-            }),
-        });
+        let queries: string[] = [];
+        const jointQuery = query.join("\n");
 
-        if (!res.ok) {
-            throw new Error(`HTTP request failed with code ${res.status} and message: \n${await res.text()}`);
+        if (config.forVirtuoso && Buffer.byteLength(jointQuery, 'utf8') > 1e6) {
+            // We need to split the query across multiple requests for Virtuoso,
+            // when the query is too big (see https://community.openlinksw.com/t/virtuosoexception-sq199/1950).
+            // We set 1MB as the maximum query size empirally, aiming to maximize the query size without hitting the limit.
+            queries = query;
+        }
+        else {
+            queries.push(jointQuery);
+        }
+
+        for (const q of queries) {
+            logger.debug(`Executing SPARQL query: \n${q}`);
+            const res = await fetch(config.graphStoreUrl!, {
+                method: "POST",
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                },
+                body: `update=${fixedEncodeURIComponent(q)}${config.accessToken ? `&access-token=${config.accessToken}` : ''}`,
+                // Increase the default request timeout to 30 minutes to accomodate for slow SPARQL engines.
+                dispatcher: new Agent({
+                    headersTimeout: 1800000,
+                    bodyTimeout: 1800000,
+                }),
+            });
+    
+            if (!res.ok) {
+                throw new Error(`HTTP request failed with code ${res.status} and message: \n${await res.text()}`);
+            }
         }
     } catch (err: unknown) {
         logger.error(`Error while executing SPARQL request: ${(<Error>err).message} - ${(<Error>err).cause}`);
