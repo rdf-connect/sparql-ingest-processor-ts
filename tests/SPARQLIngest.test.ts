@@ -1,4 +1,5 @@
-import { describe, test, expect } from "vitest";
+import { describe, test, expect, afterAll, beforeAll, afterEach } from "vitest";
+import { fastify } from "fastify";
 import { readFile } from "fs/promises";
 import { SimpleStream } from "@rdfc/js-runner";
 import { DataFactory } from "rdf-data-factory";
@@ -9,6 +10,7 @@ import { sparqlIngest } from "../src/SPARQLIngest";
 import { SDS } from "@treecg/types";
 
 import type { Bindings } from "@rdfjs/types";
+import type { FastifyInstance } from "fastify";
 import type { IngestConfig } from "../src/SPARQLIngest";
 
 const df = new DataFactory();
@@ -29,6 +31,46 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
                 ]
             ].
     `;
+
+    let server: FastifyInstance;
+    let reqCount = 0;
+
+    beforeAll(async () => {
+        // Setup mock http server
+        try {
+            server = fastify();
+            // Add support for application/x-www-form-urlencoded
+            server.addContentTypeParser(
+                "application/x-www-form-urlencoded",
+                { parseAs: 'string' },
+                (req, body, done) => {
+                    done(null, body);
+                }
+            );
+            await server.register(async (fastify) => {
+                fastify.post("/sparql", async (req, res) => {
+                    // Keep track of the number of requests
+                    reqCount++;
+                    res.send("OK");
+                });
+            });
+            await server.listen({ port: 3000 });
+            console.log(
+                `Mock server listening on ${server.addresses()[0].port}`,
+            );
+        } catch (err) {
+            console.error(err);
+            process.exit(1);
+        }
+    });
+
+    afterEach(() => {
+        reqCount = 0;
+    });
+
+    afterAll(async () => {
+        await server.close();
+    });
 
     test("SDS Member INSERT into a SPARQL endpoint", async () => {
         const memberStream = new SimpleStream<string>();
@@ -251,7 +293,9 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         const memberStream = new SimpleStream<string>();
         const sparqlWriter = new SimpleStream<string>();
         const config: IngestConfig = {
-            memberIsGraph: false
+            memberIsGraph: false,
+            forVirtuoso: true,
+            graphStoreUrl: "http://localhost:3000/sparql",
         };
 
         const localStore = RdfStore.createDefault();
@@ -286,6 +330,55 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         await memberStream.push(await readFile("./tests/data/large-member.nq", "utf-8"));
 
         await ingestPromise;
+
+        // Check that the number of requests made to the mock server is correct
+        expect(reqCount).toBe(1);
+    });
+
+    test("Default SDS Member DELETE/INSERT into an empty SPARQL endpoint having a very large member insert", async () => {
+        const memberStream = new SimpleStream<string>();
+        const sparqlWriter = new SimpleStream<string>();
+        const config: IngestConfig = {
+            memberIsGraph: false,
+            forVirtuoso: true,
+            graphStoreUrl: "http://localhost:3000/sparql",
+        };
+
+        const localStore = RdfStore.createDefault();
+        const myEngine = new QueryEngine();
+
+        const ingestPromise = new Promise<void>(resolve => {
+            sparqlWriter.data(async query => {
+                // Check the query was splited properly
+                expect(query.split("INSERT DATA").length).toBe(24)
+                // Execute produced SPARQL query
+                await myEngine.queryVoid(query, {
+                    sources: [localStore],
+                });
+                // Query the triple store to verify that triples were updated properly
+                const stream = await myEngine.queryBindings("SELECT (COUNT(*) AS ?count) WHERE { ?s ?p ?o }", {
+                    sources: [localStore],
+                });
+
+                stream.on("data", (bindings: Bindings) => {
+                    const count = bindings.get("count");
+                    expect(parseInt(count!.value)).toBe(11083);
+                }).on("end", () => {
+                    resolve();
+                });
+            });
+        });
+
+        // Execute processor function
+        await sparqlIngest(memberStream, config, sparqlWriter);
+
+        // Read large member from disk
+        await memberStream.push(await readFile("./tests/data/very-large-member.nq", "utf-8"));
+
+        await ingestPromise;
+        
+        // Check that the number of requests made to the mock server is correct
+        expect(reqCount).toBe(24);
     });
 
     test("SDS Member DELETE without shape and including all properties in a SPARQL endpoint", async () => {
@@ -578,12 +671,12 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
                     if (s?.value === "https://example.org/entity/Entity_5") {
                         sawEntity5 = true;
                     }
-                    if (s?.value === "https://example.org/entity/Entity_0" 
+                    if (s?.value === "https://example.org/entity/Entity_0"
                         && p?.value === "https://example.org/ns#newProp"
                         && o?.value === "Updated value") {
                         sawNewPropIn0 = true;
                     }
-                    if (s?.value === "https://example.org/entity/Entity_1" 
+                    if (s?.value === "https://example.org/entity/Entity_1"
                         && p?.value === "https://example.org/ns#newProp"
                         && o?.value === "Updated value") {
                         sawNewPropIn1 = true;
@@ -656,9 +749,9 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
 
         updateStore1.addQuad(
             df.quad(
-            df.namedNode("https://example.org/entity/Entity_1"),
-            df.namedNode("https://example.org/ns#newProp"),
-            df.literal("Updated value")
+                df.namedNode("https://example.org/entity/Entity_1"),
+                df.namedNode("https://example.org/ns#newProp"),
+                df.literal("Updated value")
             )
         );
         await memberStream.push(new N3Writer().quadsToString(updateStore1.getQuads()));

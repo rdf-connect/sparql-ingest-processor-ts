@@ -9,65 +9,70 @@ const df = new DataFactory();
 
 export const CREATE = (
     store: RdfStore, 
-    maxQueryLength = 500, 
+    forVirtuoso?: boolean, 
     namedGraph?: string, 
     multipleNamedGraphs?: boolean
-): string => {
+): string[] => {
     // TODO: Handle case of multiple members being Named Graphs
     
     // Split the query into multiple queries to avoid query length limits 
-    // (such as the 10000 SQL code lines in Virtuoso) for large inserts.
+    // such as the 10000 SQL code lines in Virtuoso for large inserts. 
+    // (see https://github.com/openlink/virtuoso-opensource/blob/develop/7/libsrc/Wi/sparql2sql.h#L1031).
     // 500 is an empirically obtained value to avoid exceeding the 10000 lines limit in Virtuoso
-    const stores = splitStore(store, maxQueryLength);
-
-    return `
-        ${stores.map((subStore, i) => {
-            return `
-                INSERT DATA {
-                    ${namedGraph ? `GRAPH <${namedGraph}> {` : ""}
-                        ${new N3Writer().quadsToString(subStore.getQuads())}
-                    ${namedGraph ? `}` : ""}
-                }
-                ${i === stores.length - 1 ? "" : ";"}
-            `;
-        }).join("\n")}
-    `;
+    const stores = splitStore(store, forVirtuoso ? 500 : 50000);
+    
+    return stores.map((subStore, i) => {
+        return `
+            INSERT DATA {
+                ${namedGraph ? `GRAPH <${namedGraph}> {` : ""}
+                    ${new N3Writer().quadsToString(subStore.getQuads())}
+                ${namedGraph ? `}` : ""}
+            }
+            ${i === stores.length - 1 ? "" : ";"}
+        `;
+    });
 };
 
 // We have to use a multiple query request of a DELETE WHERE + INSERT DATA for the default update operation
 // because some triple stores like Virtuoso fail on executing a DELETE INSERT WHERE when there is no data to delete.
 export const UPDATE = (
     store: RdfStore,
-    maxQueryLength = 500,
+    forVirtuoso?: boolean,
     namedGraph?: string, 
     multipleNamedGraphs?: boolean
-): string => {
+): string[] => {
     // TODO: Handle case of multiple members being Named Graphs
     const formattedQuery = formatQuery(store);
 
     // Split the query into multiple queries to avoid query length limits 
-    // (such as the 10000 SQL code lines in Virtuoso) for large inserts.
+    // such as the 10000 SQL code lines in Virtuoso for large inserts. 
+    // (see https://github.com/openlink/virtuoso-opensource/blob/develop/7/libsrc/Wi/sparql2sql.h#L1031).
     // 500 is an empirically obtained value to avoid exceeding the 10000 lines limit in Virtuoso
-    const stores = splitStore(store, maxQueryLength);
-    return `
-        ${namedGraph ? `WITH <${namedGraph}>` : ""}
-        DELETE { 
-            ${formattedQuery[0]} 
-        }
-        WHERE { 
-            ${formattedQuery[0]} 
-        };
-        ${stores.map((subStore, i) => {
-            return `
-                INSERT DATA {
-                    ${namedGraph ? `GRAPH <${namedGraph}> {` : ""}
-                        ${new N3Writer().quadsToString(subStore.getQuads())}
-                    ${namedGraph ? `}` : ""}
-                }
-                ${i === stores.length - 1 ? "" : ";"}
-            `;
-        }).join("\n")}
-    `;
+    const stores = splitStore(store, forVirtuoso ? 500 : 50000);
+    
+    const queries = [
+        `
+            ${namedGraph ? `WITH <${namedGraph}>` : ""}
+            DELETE { 
+                ${formattedQuery[0]} 
+            }
+            WHERE { 
+                ${formattedQuery[0]} 
+            };
+        `
+    ];
+    stores.forEach((subStore, i) => {
+        queries.push(`
+            INSERT DATA {
+                ${namedGraph ? `GRAPH <${namedGraph}> {` : ""}
+                    ${new N3Writer().quadsToString(subStore.getQuads())}
+                ${namedGraph ? `}` : ""}
+            }
+            ${i === stores.length - 1 ? "" : ";"}
+        `);
+    });
+
+    return queries;
 };
 
 export const DELETE = (

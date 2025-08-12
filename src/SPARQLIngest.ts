@@ -37,12 +37,12 @@ export type PerformanceConfig = {
 
 export type IngestConfig = {
     memberIsGraph: boolean;
-    maxQueryLength: number;
     memberShapes?: string[]; // TODO: This should be obtained from an SDS metadata stream
     changeSemantics?: ChangeSemantics;
     targetNamedGraph?: string;
     transactionConfig?: TransactionConfig;
     graphStoreUrl?: string;
+    forVirtuoso?: boolean; // For handling the hardcoded query limitations of Virtuoso
     accessToken?: string; // For SPARQL endpoints that require authentication like Qlever
     measurePerformance?: PerformanceConfig;
 };
@@ -156,11 +156,11 @@ export async function sparqlIngest(
             }
 
             // Variable that will hold the full query to be executed
-            let query;
+            let query: string[] | undefined;
 
             if (config.changeSemantics) {
                 if (transactionMembers.length > 0) {
-                    query = createTransactionQueries(transactionMembers, config);
+                    query = [createTransactionQueries(transactionMembers, config)];
                     // Clean up transaction stores
                     transactionMembers = [];
                 } else {
@@ -180,13 +180,13 @@ export async function sparqlIngest(
                     // Assemble corresponding SPARQL UPDATE query
                     if (ctv.object.value === config.changeSemantics.createValue) {
                         logger.info(`Preparing 'INSERT DATA {}' SPARQL query for member ${memberIRI.value}`);
-                        query = CREATE(store, config.maxQueryLength, ng);
+                        query = CREATE(store, config.forVirtuoso, ng);
                     } else if (ctv.object.value === config.changeSemantics.updateValue) {
                         logger.info(`Preparing 'DELETE {} INSERT {} WHERE {}' SPARQL query for member ${memberIRI.value}`);
-                        query = UPDATE(store, config.maxQueryLength, ng);
+                        query = UPDATE(store, config.forVirtuoso, ng);
                     } else if (ctv.object.value === config.changeSemantics.deleteValue) {
                         logger.info(`Preparing 'DELETE WHERE {}' SPARQL query for member ${memberIRI.value}`);
-                        query = DELETE(store, [memberIRI.value], config.memberShapes, ng);
+                        query = [DELETE(store, [memberIRI.value], config.memberShapes, ng)];
                     } else {
                         throw new Error(`[sparqlIngest] Unrecognized change type value: ${ctv.object.value}`);
                     }
@@ -197,19 +197,19 @@ export async function sparqlIngest(
                         ts.store.getQuads(null, null, null, null).forEach(q => store.addQuad(q));
                     });
                     logger.info(`Preparing 'DELETE {} WHERE {} + INSERT DATA {}' SPARQL query for transaction member ${memberIRI.value}`);
-                    query = UPDATE(store, config.maxQueryLength, config.targetNamedGraph);
+                    query = UPDATE(store, config.forVirtuoso, config.targetNamedGraph);
                 } else {
                     // Determine if we have a named graph (either explicitly configure or as the member itself)
                     const ng = getNamedGraphIfAny(memberIRI, config.memberIsGraph, config.targetNamedGraph);
                     // No change semantics are provided so we do a DELETE/INSERT query by default
                     logger.info(`Preparing 'DELETE {} WHERE {} + INSERT DATA {}' SPARQL query for member ${memberIRI.value}`);
-                    query = UPDATE(store, config.maxQueryLength, ng);
+                    query = UPDATE(store, config.forVirtuoso, ng);
                 }
             }
 
             // Execute the update query
-            if (query) {
-                logger.debug(`Generated SPARQL query: \n${query}`);
+            if (query && query.length > 0) {
+                logger.debug(`Complete SPARQL query generated for received member: \n${query.join("\n")}`);
                 if (config.graphStoreUrl) {
                     const t0 = Date.now();
                     await doSPARQLRequest(query, config);
@@ -221,7 +221,7 @@ export async function sparqlIngest(
                 }
 
                 if (sparqlWriter) {
-                    await sparqlWriter.push(query);
+                    await sparqlWriter.push(query.join("\n"));
                 }
             } else {
                 logger.warn(`No query generated for member ${memberIRI.value}`);
@@ -237,7 +237,7 @@ export async function sparqlIngest(
         }
         if (config.measurePerformance) {
             await writeFile(
-                `${config.measurePerformance.outputPath}/${config.measurePerformance.name}.json`, 
+                `${config.measurePerformance.outputPath}/${config.measurePerformance.name}.json`,
                 JSON.stringify(requestsPerformance),
                 "utf-8"
             );
@@ -309,10 +309,10 @@ function createTransactionQueries(
 
     // Build multi-operation SPARQL query
     if (createStore.size > 0) {
-        transactionQueryBuilder.push(CREATE(createStore, config.maxQueryLength, config.targetNamedGraph));
+        transactionQueryBuilder.push(CREATE(createStore, config.forVirtuoso, config.targetNamedGraph).join("\n"));
     }
     if (updateStore.size > 0) {
-        transactionQueryBuilder.push(UPDATE(updateStore, config.maxQueryLength, config.targetNamedGraph));
+        transactionQueryBuilder.push(UPDATE(updateStore, config.forVirtuoso, config.targetNamedGraph).join("\n"));
     }
     if (updateStore.size > 0) {
         transactionQueryBuilder.push(DELETE(

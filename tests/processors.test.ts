@@ -42,7 +42,7 @@ describe("Tests for SPARQL ingest processor", async () => {
                         js:transactionEndPath "http://ex.org/transactionEnd"
                     ];
                     js:graphStoreUrl "http://ex.org/myGraphStore";
-                    js:maxQueryLength 1000;
+                    js:forVirtuoso true;
                     js:accessToken "someAccessToken";
                     js:measurePerformance [
                         js:name "PerformanceTest";
@@ -81,7 +81,7 @@ describe("Tests for SPARQL ingest processor", async () => {
         expect(ingestConfig.transactionConfig.transactionIdPath).toBe("http://ex.org/transactionId");
         expect(ingestConfig.transactionConfig.transactionEndPath).toBe("http://ex.org/transactionEnd");
         expect(ingestConfig.graphStoreUrl).toBe("http://ex.org/myGraphStore");
-        expect(ingestConfig.maxQueryLength).toBe(1000);
+        expect(ingestConfig.forVirtuoso).toBeTruthy();
         expect(ingestConfig.accessToken).toBe("someAccessToken");
         expect(ingestConfig.measurePerformance.name).toBe("PerformanceTest");
         expect(ingestConfig.measurePerformance.outputPath).toBe("/some/output/path");
