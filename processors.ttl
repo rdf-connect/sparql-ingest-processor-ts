@@ -119,6 +119,18 @@ js:SPARQLIngest a js:JsProcess;
     sh:name "outputPath";
     sh:maxCount 1;
     sh:minCount 1;
+  ], [
+    sh:path js:failureIsFatal;
+    sh:datatype xsd:boolean;
+    sh:name "failureIsFatal";
+    sh:maxCount 1;
+    sh:minCount 0;
+  ], [
+    sh:path js:queryTimeout;
+    sh:datatype xsd:integer;
+    sh:name "queryTimeout";
+    sh:maxCount 1;
+    sh:minCount 0;
   ].
 
 [ ] a sh:NodeShape;

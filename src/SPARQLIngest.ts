@@ -33,6 +33,8 @@ export type TransactionConfig = {
 export type PerformanceConfig = {
     name: string;
     outputPath: string;
+    queryTimeout?: number; // Timeout for SPARQL queries in seconds
+    failureIsFatal?: boolean;
 };
 
 export type IngestConfig = {
@@ -211,13 +213,21 @@ export async function sparqlIngest(
             if (query && query.length > 0) {
                 logger.debug(`Complete SPARQL query generated for received member: \n${query.join("\n")}`);
                 if (config.graphStoreUrl) {
-                    const t0 = Date.now();
-                    await doSPARQLRequest(query, config);
-                    const reqTime = Date.now() - t0;
-                    if (config.measurePerformance) {
-                        requestsPerformance.push(reqTime);
+                    try {
+                        const t0 = Date.now();
+                        await doSPARQLRequest(query, config);
+                        const reqTime = Date.now() - t0;
+                        if (config.measurePerformance) {
+                            requestsPerformance.push(reqTime);
+                        }
+                        logger.info(`Executed query on remote SPARQL server ${config.graphStoreUrl} (took ${reqTime} ms)`);
+                    } catch (error) {
+                        if (config.measurePerformance?.failureIsFatal) {
+                            throw error;
+                        } else {
+                            requestsPerformance.push(-1); // -1 indicates a failure
+                        }
                     }
-                    logger.info(`Executed query on remote SPARQL server ${config.graphStoreUrl} (took ${reqTime} ms)`);
                 }
 
                 if (sparqlWriter) {
