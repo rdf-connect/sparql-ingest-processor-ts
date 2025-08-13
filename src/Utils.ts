@@ -125,6 +125,8 @@ export async function doSPARQLRequest(query: string[], config: IngestConfig): Pr
             queries.push(jointQuery);
         }
 
+        const timeout = config.measurePerformance?.queryTimeout || 1800; // Default to 30 minutes if not specified
+
         for (const q of queries) {
             logger.debug(`Executing SPARQL query: \n${q}`);
             const res = await fetch(config.graphStoreUrl!, {
@@ -133,10 +135,10 @@ export async function doSPARQLRequest(query: string[], config: IngestConfig): Pr
                     'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                 },
                 body: `update=${fixedEncodeURIComponent(q)}${config.accessToken ? `&access-token=${config.accessToken}` : ''}`,
-                // Increase the default request timeout to 30 minutes to accomodate for slow SPARQL engines.
+                // Set the request timeout to accomodate for slow SPARQL engines.
                 dispatcher: new Agent({
-                    headersTimeout: 1800000,
-                    bodyTimeout: 1800000,
+                    headersTimeout: timeout * 1000,
+                    bodyTimeout: timeout * 1000,
                 }),
             });
     

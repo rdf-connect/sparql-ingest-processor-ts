@@ -46,7 +46,9 @@ describe("Tests for SPARQL ingest processor", async () => {
                     js:accessToken "someAccessToken";
                     js:measurePerformance [
                         js:name "PerformanceTest";
-                        js:outputPath "/some/output/path"
+                        js:outputPath "/some/output/path";
+                        js:failureIsFatal true;
+                        js:queryTimeout 30
                     ]
                 ];
                 js:sparqlWriter <jw>.
@@ -85,6 +87,8 @@ describe("Tests for SPARQL ingest processor", async () => {
         expect(ingestConfig.accessToken).toBe("someAccessToken");
         expect(ingestConfig.measurePerformance.name).toBe("PerformanceTest");
         expect(ingestConfig.measurePerformance.outputPath).toBe("/some/output/path");
+        expect(ingestConfig.measurePerformance.failureIsFatal).toBeTruthy();
+        expect(ingestConfig.measurePerformance.queryTimeout).toBe(30);
         testWriter(sparqlWriter);
 
         await checkProc(env.file, env.func);
