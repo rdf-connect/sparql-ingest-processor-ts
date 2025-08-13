@@ -222,10 +222,12 @@ export async function sparqlIngest(
                         }
                         logger.info(`Executed query on remote SPARQL server ${config.graphStoreUrl} (took ${reqTime} ms)`);
                     } catch (error) {
-                        if (config.measurePerformance?.failureIsFatal) {
+                        if (!config.measurePerformance || config.measurePerformance.failureIsFatal) {
                             throw error;
                         } else {
-                            requestsPerformance.push(-1); // -1 indicates a failure
+                            if (config.measurePerformance) {
+                                requestsPerformance.push(-1); // -1 indicates a failure
+                            }
                         }
                     }
                 }
