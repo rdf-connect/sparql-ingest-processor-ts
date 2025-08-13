@@ -1,6 +1,6 @@
 {
     "name": "@rdfc/sparql-ingest-processor-ts",
-    "version": "0.4.8",
+    "version": "0.4.9",
     "description": "SPARQL Update function to be within RDF-Connect pipelines",
     "author": "Julián Rojas",
     "type": "module",
@@ -37,8 +37,8 @@
         "@rdfjs/types": "^2.0.1",
         "@types/n3": "^1.26.0",
         "@types/node": "^24.2.1",
-        "@typescript-eslint/eslint-plugin": "^8.39.0",
-        "@typescript-eslint/parser": "^8.39.0",
+        "@typescript-eslint/eslint-plugin": "^8.39.1",
+        "@typescript-eslint/parser": "^8.39.1",
         "@vitest/coverage-v8": "^3.2.4",
         "eslint": "^9.33.0",
         "eslint-config-prettier": "^10.1.8",

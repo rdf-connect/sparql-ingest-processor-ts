@@ -149,7 +149,10 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
 
         // Add some data to the triple store first
         const localStore = RdfStore.createDefault();
-        new Parser().parse(dataGenerator({ includeAllProps: true })).forEach(quad => localStore.addQuad(quad));
+        new Parser().parse(dataGenerator({ 
+            includeAllProps: true,
+            includeBlankNodes: true,
+        })).forEach(quad => localStore.addQuad(quad));
         const myEngine = new QueryEngine();
 
         const ingestPromise = new Promise<void>(resolve => {
@@ -201,8 +204,11 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
 
         // Prepare updated member
         const store = RdfStore.createDefault();
-        new Parser().parse(dataGenerator({ withMetadata: true, includeAllProps: true }))
-            .forEach(quad => store.addQuad(quad));
+        new Parser().parse(dataGenerator({ 
+            withMetadata: true,
+            includeAllProps: true,
+            includeBlankNodes: true,
+        })).forEach(quad => store.addQuad(quad));
         store.addQuad(
             df.quad(
                 df.namedNode("https://example.org/entity/Entity_0"),
@@ -376,7 +382,7 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         await memberStream.push(await readFile("./tests/data/very-large-member.nq", "utf-8"));
 
         await ingestPromise;
-        
+
         // Check that the number of requests made to the mock server is correct
         expect(reqCount).toBe(24);
     });
@@ -396,7 +402,10 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
 
         // Add some data to the triple store first
         const localStore = RdfStore.createDefault();
-        new Parser().parse(dataGenerator({ includeAllProps: true })).forEach(quad => localStore.addQuad(quad));
+        new Parser().parse(dataGenerator({ 
+            includeAllProps: true,
+            includeBlankNodes: true,
+        })).forEach(quad => localStore.addQuad(quad));
         const myEngine = new QueryEngine();
 
         const ingestPromise = new Promise<void>(resolve => {
@@ -432,6 +441,7 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         await memberStream.push(dataGenerator({
             changeType: config.changeSemantics!.deleteValue,
             includeAllProps: true,
+            includeBlankNodes: true,
             withMetadata: true,
         }));
 
@@ -783,6 +793,7 @@ function dataGenerator(props: {
     memberIndex?: string,
     withMetadata?: boolean,
     includeAllProps?: boolean,
+    includeBlankNodes?: boolean,
     isPartOfTransaction?: boolean,
     isLastOfTransaction?: boolean,
     memberIsGraph?: boolean,
@@ -808,18 +819,23 @@ function dataGenerator(props: {
             }` : ""}
 
             <https://example.org/entity/Entity_${props.memberIndex || 0}> a ex:Entity;
-                ${props.changeType ? `ex:changeType <${props.changeType}>;` : ""}
-                ${props.isPartOfTransaction ? `ldes:transactionId "transact_123";` : ""}
-                ${props.isLastOfTransaction ? `ldes:isLastOfTransaction "true"^^xsd:boolean;` : ""}
-                ${props.includeAllProps ? `
-                    ex:prop1 "some value";
-                    ex:prop2 [
-                        a ex:NestedEntity;
-                        ex:nestedProp "some other value"
-                    ];
-                    ex:prop3 ex:SomeNamedNode;
-                    ex:propNum +30.
-                ` : "."}
+            ${props.changeType ? `ex:changeType <${props.changeType}>;` : ""}
+            ${props.isPartOfTransaction ? `ldes:transactionId "transact_123";` : ""}
+            ${props.isLastOfTransaction ? `ldes:isLastOfTransaction "true"^^xsd:boolean;` : ""}
+            ${props.includeBlankNodes ? `ex:propBn _:bn_a;` : ""}
+            ${props.includeAllProps ? `
+                ex:prop1 "some value";
+                ex:prop2 [
+                    a ex:NestedEntity;
+                    ex:nestedProp "some other value"
+                ];
+                ex:prop3 ex:SomeNamedNode;
+                ex:propNum +30.
+            ` : "."}
+            ${props.includeBlankNodes ? `
+            _:bn_a ex:bnProp _:bn_b.
+            _:bn_b ex:bnProp2 "some bn value".
+            ` : ""}
         `;
     } else {
         record = `
