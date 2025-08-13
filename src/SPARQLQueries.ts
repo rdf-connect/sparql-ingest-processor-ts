@@ -111,6 +111,7 @@ function formatQuery(
     indexStart: number = 0
 ): string[] {
     const subjectSet = new Set<string>();
+    const blankNodeMap = new Map<string, string>();
     const queryBuilder: string[] = [];
     const formattedQueries: string[] = [];
     let i = indexStart;
@@ -125,17 +126,28 @@ function formatQuery(
                 // Make sure every subject is processed only once
                 subjectSet.add(quad.subject.value);
                 if (quad.subject.termType === "NamedNode") {
-                    // Define a pattern that covers every property and value of named nodes
+                    // Define a pattern that covers every property and value of this named node
                     queryBuilder.push(`<${quad.subject.value}> ?p_${i} ?o_${i}.`);
                 } else if (quad.subject.termType === "BlankNode") {
+                    if (!blankNodeMap.has(quad.subject.value)) {
+                        // If the blank node is not yet mapped, create a new variable for it
+                        blankNodeMap.set(quad.subject.value, `?bn_${i}`);
+                    }
+                    if (quad.object.termType === "BlankNode") {
+                        // Create a variable for the object if it is a blank node and is the first time we see it
+                        blankNodeMap.set(quad.object.value, `?bn_ref_${i}`);
+                    }
+
                     // Define a pattern that covers the referencing BGP and every property and value of blank nodes
-                    queryBuilder.push(`?bn_${i} <${quad.predicate.value}> ${
-                        quad.object.termType === "Literal" ? `"${quad.object.value}"^^<${quad.object.datatype.value}>` 
-                        : quad.object.termType === "BlankNode" ? `?bn_ref_${i}` 
+                    queryBuilder.push(`${blankNodeMap.get(quad.subject.value)} <${quad.predicate.value}> ${
+                        quad.object.termType === "Literal" ? `"${quad.object.value}"^^<${quad.object.datatype.value}>`
+                        : quad.object.termType === "BlankNode" ? `${blankNodeMap.get(quad.object.value)} ` 
                         : `<${quad.object.value}>`
                     }.`);
-                    queryBuilder.push(`?bn_${i} ?p_${i} ?o_${i}.`);
-                    queryBuilder.push(`?s_ref_${i} ?p_ref_${i} ?bn_${i}.`);
+                    // Generic pattern to cover all properties of the blank node
+                    queryBuilder.push(`${blankNodeMap.get(quad.subject.value)} ?p_${i} ?o_${i}.`);
+                    // Generic pattern to cover all triples that reference the blank node
+                    queryBuilder.push(`?s_ref_${i} ?p_ref_${i} ${blankNodeMap.get(quad.subject.value)}.`);
                 }
                 i++;
             }
