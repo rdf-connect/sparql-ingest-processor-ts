@@ -1,11 +1,11 @@
 import { XSD } from "@treecg/types";
 import { DataFactory } from "rdf-data-factory";
 import { RdfStore } from "rdf-stores";
-import { getLoggerFor } from "./LogUtil";
 import { Agent } from "undici";
 
 import type { Term, Quad_Subject, Quad_Object } from "@rdfjs/types";
 import type { IngestConfig } from "./SPARQLIngest";
+import {Logger} from "winston";
 
 const df = new DataFactory();
 
@@ -109,8 +109,7 @@ export function sanitizeQuads(store: RdfStore): void {
     }
 }
 
-export async function doSPARQLRequest(query: string[], config: IngestConfig): Promise<void> {
-    const logger = getLoggerFor("doSPARQLRequest");
+export async function doSPARQLRequest(query: string[], config: IngestConfig, logger: Logger): Promise<void> {
     try {
         let queries: string[] = [];
         const jointQuery = query.join("\n");
@@ -141,7 +140,7 @@ export async function doSPARQLRequest(query: string[], config: IngestConfig): Pr
                     bodyTimeout: timeout * 1000,
                 }),
             });
-    
+
             if (!res.ok) {
                 throw new Error(`HTTP request failed with code ${res.status} and message: \n${await res.text()}`);
             }
