@@ -1,6 +1,6 @@
 {
     "name": "@rdfc/sparql-ingest-processor-ts",
-    "version": "0.5.1",
+    "version": "1.0.0",
     "description": "SPARQL Update function to be within RDF-Connect pipelines",
     "author": "Julián Rojas",
     "contributors": [
@@ -36,7 +36,7 @@
     },
     "devDependencies": {
         "@comunica/query-sparql": "^4.3.0",
-        "@rdfc/js-runner": "^2.0.0-alpha.10",
+        "@rdfc/js-runner": "^2.0.0",
         "@rdfjs/types": "^2.0.1",
         "@types/n3": "^1.26.0",
         "@types/node": "^24.3.0",
