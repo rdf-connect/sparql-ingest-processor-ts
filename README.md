@@ -1,41 +1,135 @@
 # sparql-ingest-processor-ts
 
-[![Bun CI](https://github.com/rdf-connect/sparql-ingest-processor-ts/actions/workflows/build-test.yml/badge.svg)](https://github.com/rdf-connect/sparql-ingest-processor-ts/actions/workflows/build-test.yml) [![npm](https://img.shields.io/npm/v/@rdfc/sparql-ingest-processor-ts.svg?style=popout)](https://npmjs.com/package/@rdfc/sparql-ingest-processor-ts)
+[![Build and tests with Node.js](https://github.com/rdf-connect/sparql-ingest-processor-ts/actions/workflows/build-test.yml/badge.svg)](https://github.com/rdf-connect/sparql-ingest-processor-ts/actions/workflows/build-test.yml) [![npm](https://img.shields.io/npm/v/@rdfc/sparql-ingest-processor-ts.svg?style=popout)](https://npmjs.com/package/@rdfc/sparql-ingest-processor-ts)
 
-Typescript [RDF-Connect](https://rdf-connect.github.io/rdfc.github.io/) processor for producing the corresponding SPARQL Update queries that write a stream of [SDS records](https://treecg.github.io/SmartDataStreams-Spec/) into a SPARQL triple store. Currently this repository exposes one function:
+TypeScript [RDF-Connect](https://rdf-connect.github.io/rdfc.github.io/) processor for ingesting [SDS records](https://treecg.github.io/SmartDataStreams-Spec/) into a SPARQL endpoint.
 
-### [`js:SPARQLIngest`](https://github.com/rdf-connect/sparql-ingest-processor-ts/blob/main/processors.ttl#L9)
+This processor takes a stream of RDF records, transforms them into [SPARQL Update](https://www.w3.org/TR/sparql11-update/) queries, and executes them against a SPARQL Graph Store via the [SPARQL Protocol](https://www.w3.org/TR/sparql11-protocol/).  
+It supports `INSERT DATA`, `DELETE INSERT WHERE`, and `DELETE WHERE` queries, configurable through change semantics or SDS record content.
 
-This processor is able to take an input stream of SDS records (described by the `sds:stream` and `sds:payload` properties) and produce corresponding [SPARQL Update](https://www.w3.org/TR/sparql11-update/) queries (`INSERT DATA`, `DELETE INSERT WHERE` and `DELETE WHERE`) to be executed over a graph store via the [SPARQL protocol](https://www.w3.org/TR/sparql11-protocol/).
+---
 
-By default, this processor will produce a `DELETE INSERT WHERE` query that will overwrite all the triples present in the payload of the received SDS record. However, specific query operations can be generated based on configurable change semantics that can be included in the SDS record payload. Next, an example of this processor is shown with a configuration that specifies the predicate `ex:changeType` and the values `as:Create`, `as:Update` and `as:Delete` as the expected values for generating `INSERT DATA`, `DELETE INSERT WHERE` ans `DELETE WHERE` queries respectively.
+## Usage
 
-```turtle
-[ ] a js:SPARQLIngest; 
-    js:memberStream <inputStream>;
-    js:ingestConfig [
-        js:memberIsGraph false;
-        js:memberShape "Some SHACL shape", "Another SHACL shape";
-        js:changeSemantics [
-            js:changeTypePath "http://ex.org/changeType";
-            js:createValue "http://ex.org/Create";
-            js:updateValue "http://ex.org/Update";
-            js:deleteValue "http://ex.org/Delete"
-        ];
-        js:targetNamedGraph "http://ex.org/myGraph";
-        js:transactionIdPath "http://ex.org/trancationId"
-    ];
-    js:sparqlWriter <outputStream>.
+### Installation
+
+```bash
+npm install
+npm run build
 ```
 
-For the case of delete operations, additional information can be provided depending on the content of the SDS record payload signaling a delete:
+Or install from NPM:
 
-1. The payload is complete and contains all the triples that must be deleted from the triple store. In this case no additional information is needed.
-2. The payload only contains the type of the payload's main entity (or member) via `rdf:type`. In this case one or more SHACL shapes can be configured via the `js:memberShape` property. The processor will identify the corresponding shape of an input SDS record (via the shape's target class) and the proper query pattern will be generated.
-3. The payload does not contain the type of the payload's main entity (or member). In this case, is not possible to identify the corresponding SHACL shape, therefore a query reflecting all shapes via `OPTIONAL` clauses will be generated.
+```bash
+npm install @rdfc/sparql-ingest-processor-ts
+```
 
-In case that the main entity (member) of the SDS record payload is always a named graph, this can be configured by setting the `js:memberIsGraph` to `true`. In this scenario, all resulting queries will be properly set with the `GRAPH` and the `WITH` clauses.
+---
 
-If a specific named graph should be targeted by all the resulting SPARQL Update queries, this can be configured via the `js:targetNamedGraph` property. This property will be ignored if the `js:memberIsGraph` property is `true`.
+### Pipeline Configuration Example
 
-Lastly, the main entity (member) of SDS record payload may contain a transaction ID when the member is part of a larger group of members that must be updated altogether into the targeted triple store. This particular property can be indicated to the processor via the `js:transactionIdPath` configuration property. The processor will proceed to buffer all records containing the same transaction ID and execute the corresponding SPARQL Update query for all members at once.
+```turtle
+@prefix rdfc: <https://w3id.org/rdf-connect#>.
+@prefix owl: <http://www.w3.org/2002/07/owl#>.
+
+### Import the processor definitions
+<> owl:imports <./node_modules/@rdfc/sparql-ingest-processor-ts/processors.ttl>.
+
+### Define the channels your processor needs
+<in> a rdfc:Reader.
+<out> a rdfc:Writer.
+
+### Attach the processor to the pipeline under the NodeRunner
+# Add the `rdfc:processor <ingester>` statement under the `rdfc:consistsOf` statement of the `rdfc:NodeRunner`
+
+### Define and configure the processor
+<ingester> a rdfc:SPARQLIngest;
+    rdfc:memberStream <in>;
+    rdfc:ingestConfig [
+        rdfc:memberIsGraph false;
+        rdfc:memberShape "http://ex.org/Shape1", "http://ex.org/Shape2";
+        rdfc:changeSemantics [
+            rdfc:changeTypePath "http://ex.org/changeType";
+            rdfc:createValue "http://ex.org/Create";
+            rdfc:updateValue "http://ex.org/Update";
+            rdfc:deleteValue "http://ex.org/Delete"
+        ];
+        rdfc:targetNamedGraph "http://ex.org/myGraph";
+        rdfc:transactionConfig [
+            rdfc:transactionIdPath "http://ex.org/transactionId";
+            rdfc:transactionEndPath "http://ex.org/transactionEnd"
+        ];
+        rdfc:graphStoreUrl "http://example.org/sparql";
+        rdfc:forVirtuoso false
+    ];
+    rdfc:sparqlWriter <out>.
+```
+
+---
+
+## Configuration
+
+### Parameters of `rdfc:SPARQLIngest`:
+- `rdfc:memberStream` (**rdfc:Reader**, required): Input SDS record stream.
+- `rdfc:ingestConfig` (**rdfc:IngestConfig**, required): Configuration for ingest behavior.
+- `rdfc:sparqlWriter` (**rdfc:Writer**, optional): Output stream of generated SPARQL queries.
+
+---
+
+### Parameters of `rdfc:IngestConfig`:
+- `rdfc:memberIsGraph` (**boolean**, required): Whether each SDS record represents a named graph.
+- `rdfc:memberShape` (**string**, optional, repeatable): SHACL shape identifiers used to guide query construction when payloads are incomplete.
+- `rdfc:changeSemantics` (**rdfc:ChangeSemantics**, optional): Configures mapping between change types (create/update/delete) and SPARQL operations.
+- `rdfc:targetNamedGraph` (**string**, optional): Force all operations into a specific named graph (ignored if `memberIsGraph = true`).
+- `rdfc:transactionConfig` (**rdfc:TransactionConfig**, optional): Groups records by transaction ID for atomic updates.
+- `rdfc:graphStoreUrl` (**string**, optional): SPARQL Graph Store endpoint URL.
+- `rdfc:forVirtuoso` (**boolean**, optional): Enables Virtuoso-specific handling.
+- `rdfc:accessToken` (**string**, optional): Access token for authenticated graph stores.
+- `rdfc:measurePerformance` (**rdfc:PerformanceConfig**, optional): Enables performance measurement of SPARQL queries.
+
+---
+
+### Parameters of `rdfc:ChangeSemantics`:
+- `rdfc:changeTypePath` (**string**, required): Predicate identifying the type of change in SDS records.
+- `rdfc:createValue` (**string**, required): Value representing a create operation.
+- `rdfc:updateValue` (**string**, required): Value representing an update operation.
+- `rdfc:deleteValue` (**string**, required): Value representing a delete operation.
+
+---
+
+### Parameters of `rdfc:TransactionConfig`:
+- `rdfc:transactionIdPath` (**string**, required): Predicate identifying the transaction ID.
+- `rdfc:transactionEndPath` (**string**, required): Predicate marking the last record in a transaction.
+
+---
+
+### Parameters of `rdfc:PerformanceConfig`:
+- `rdfc:name` (**string**, required): Name of the performance measurement run.
+- `rdfc:outputPath` (**string**, required): File path where performance logs will be written.
+- `rdfc:failureIsFatal` (**boolean**, optional): If true, aborts on performance measurement failure.
+- `rdfc:queryTimeout` (**integer**, optional): Maximum query execution time in milliseconds.
+
+---
+
+## Example
+
+```turtle
+<ingester> a rdfc:SPARQLIngest;
+    rdfc:memberStream <in>;
+    rdfc:ingestConfig [
+        rdfc:memberIsGraph true;
+        rdfc:targetNamedGraph "http://example.org/targetGraph";
+        rdfc:graphStoreUrl "http://example.org/sparql"
+    ];
+    rdfc:sparqlWriter <out>.
+```
+
+---
+
+## Notes
+
+- Delete operations can be handled differently depending on how complete the SDS record payload is.
+- When `memberIsGraph = true`, queries are wrapped with `GRAPH` and `WITH` clauses.
+- Transactions can buffer multiple SDS records and commit them together using `rdfc:transactionConfig`.
+- SHACL shapes (`rdfc:memberShape`) can be provided to help identify deletion targets when payloads are incomplete.
+

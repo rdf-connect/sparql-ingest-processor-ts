@@ -1,132 +1,115 @@
-@prefix js: <https://w3id.org/conn/js#>.
-@prefix fno: <https://w3id.org/function/ontology#>.
-@prefix fnom: <https://w3id.org/function/vocabulary/mapping#>.
-@prefix xsd: <http://www.w3.org/2001/XMLSchema#>.
-@prefix : <https://w3id.org/conn#>.
+@prefix rdfc: <https://w3id.org/rdf-connect#>.
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>.
 @prefix sh: <http://www.w3.org/ns/shacl#>.
-@prefix dc: <http://purl.org/dc/terms/>.
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#>.
 
-js:SPARQLIngest a js:JsProcess;
-  js:file <./lib/SPARQLIngest.js>;
-  js:function "sparqlIngest";
-  js:location <./>;
-  js:mapping [
-    a fno:Mapping;
-    fno:parameterMapping [
-      a fnom:PositionParameterMapping;
-      fnom:functionParameter "memberStream";
-      fnom:implementationParameterPosition "0"^^xsd:integer;
-    ], [
-      a fnom:PositionParameterMapping;
-      fnom:functionParameter "ingestConfig";
-      fnom:implementationParameterPosition "1"^^xsd:integer;
-    ], [
-      a fnom:PositionParameterMapping;
-      fnom:functionParameter "sparqlWriter";
-      fnom:implementationParameterPosition "2"^^xsd:integer;
-    ]
-].
+rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
+  rdfs:label "SPARQL Ingest Processor";
+  rdfs:comment "A processor that ingests RDF data into a SPARQL endpoint";
+  rdfc:file <./lib/SPARQLIngest.js>;
+  rdfc:class "SPARQLIngest";
+  rdfc:entrypoint <./>.
 
 [ ] a sh:NodeShape;
-  sh:targetClass js:SPARQLIngest;
+  sh:targetClass rdfc:SPARQLIngest;
   sh:property [
-    sh:path js:memberStream;
+    sh:path rdfc:memberStream;
     sh:name "memberStream";
-    sh:class :ReaderChannel;
+    sh:class rdfc:Reader;
     sh:minCount 1;
     sh:maxCount 1;
   ], [
-    sh:path js:ingestConfig;
-    sh:name "ingestConfig";
-    sh:class js:IngestConfig;
+    sh:path rdfc:ingestConfig;
+    sh:name "config";
+    sh:class rdfc:IngestConfig;
     sh:minCount 1;
     sh:maxCount 1;
   ], [
-    sh:path js:sparqlWriter;
+    sh:path rdfc:sparqlWriter;
     sh:name "sparqlWriter";
-    sh:class :WriterChannel;
+    sh:class rdfc:Writer;
     sh:maxCount 1;
   ].
 
 [ ] a sh:NodeShape;
-  sh:targetClass js:IngestConfig;
+  sh:targetClass rdfc:IngestConfig;
   sh:property [
-    sh:path js:memberIsGraph;
+    sh:path rdfc:memberIsGraph;
     sh:datatype xsd:boolean;
     sh:name "memberIsGraph";
     sh:maxCount 1;
     sh:minCount 1;
   ], [
-    sh:path js:memberShape;
+    sh:path rdfc:memberShape;
     sh:datatype xsd:string;
     sh:name "memberShapes";
     sh:minCount 0;
   ], [
-    sh:path js:changeSemantics;
-    sh:class js:ChangeSemantics;
+    sh:path rdfc:changeSemantics;
+    sh:class rdfc:ChangeSemantics;
     sh:name "changeSemantics";
     sh:maxCount 1;
     sh:minCount 0;
   ], [
-    sh:path js:targetNamedGraph;
+    sh:path rdfc:targetNamedGraph;
     sh:datatype xsd:string;
     sh:name "targetNamedGraph";
     sh:maxCount 1;
     sh:minCount 0;
   ], [
-    sh:path js:transactionConfig;
-    sh:class js:TransactionConfig;
+    sh:path rdfc:transactionConfig;
+    sh:class rdfc:TransactionConfig;
     sh:name "transactionConfig";
     sh:maxCount 1;
     sh:minCount 0;
   ], [
-    sh:path js:graphStoreUrl;
+    sh:path rdfc:graphStoreUrl;
     sh:datatype xsd:string;
     sh:name "graphStoreUrl";
     sh:maxCount 1;
     sh:minCount 0;
   ], [
-    sh:path js:forVirtuoso;
+    sh:path rdfc:forVirtuoso;
     sh:datatype xsd:boolean;
     sh:name "forVirtuoso";
     sh:maxCount 1;
     sh:minCount 0;
   ], [
-    sh:path js:accessToken;
+    sh:path rdfc:accessToken;
     sh:datatype xsd:string;
     sh:name "accessToken";
     sh:maxCount 1;
     sh:minCount 0;
   ], [
-    sh:path js:measurePerformance;
-    sh:class js:PerformanceConfig;
+    sh:path rdfc:measurePerformance;
+    sh:class rdfc:PerformanceConfig;
     sh:name "measurePerformance";
     sh:maxCount 1;
     sh:minCount 0;
   ].
 
 [ ] a sh:NodeShape;
-  sh:targetClass js:PerformanceConfig;
+  sh:targetClass rdfc:PerformanceConfig;
   sh:property [
-    sh:path js:name;
+    sh:path rdfc:name;
     sh:datatype xsd:string;
     sh:name "name";
     sh:maxCount 1;
     sh:minCount 1;
   ], [
-    sh:path js:outputPath;
+    sh:path rdfc:outputPath;
     sh:datatype xsd:string;
     sh:name "outputPath";
     sh:maxCount 1;
     sh:minCount 1;
   ], [
-    sh:path js:failureIsFatal;
+    sh:path rdfc:failureIsFatal;
     sh:datatype xsd:boolean;
     sh:name "failureIsFatal";
     sh:maxCount 1;
     sh:minCount 0;
   ], [
-    sh:path js:queryTimeout;
+    sh:path rdfc:queryTimeout;
     sh:datatype xsd:integer;
     sh:name "queryTimeout";
     sh:maxCount 1;
@@ -134,45 +117,46 @@ js:SPARQLIngest a js:JsProcess;
   ].
 
 [ ] a sh:NodeShape;
-  sh:targetClass js:ChangeSemantics;
+  sh:targetClass rdfc:ChangeSemantics;
   sh:property [
-    sh:path js:changeTypePath;
+    sh:path rdfc:changeTypePath;
     sh:datatype xsd:string;
     sh:name "changeTypePath";
     sh:maxCount 1;
     sh:minCount 1;
   ], [
-    sh:path js:createValue;
+    sh:path rdfc:createValue;
     sh:datatype xsd:string;
     sh:name "createValue";
     sh:maxCount 1;
     sh:minCount 1;
   ], [
-    sh:path js:updateValue;
+    sh:path rdfc:updateValue;
     sh:datatype xsd:string;
     sh:name "updateValue";
     sh:maxCount 1;
     sh:minCount 1;
   ], [
-    sh:path js:deleteValue;
+    sh:path rdfc:deleteValue;
     sh:datatype xsd:string;
     sh:name "deleteValue";
     sh:maxCount 1;
     sh:minCount 1;
   ].
 
-  [ ] a sh:NodeShape;
-  sh:targetClass js:TransactionConfig;
+[ ] a sh:NodeShape;
+  sh:targetClass rdfc:TransactionConfig;
   sh:property [
-    sh:path js:transactionIdPath;
+    sh:path rdfc:transactionIdPath;
     sh:datatype xsd:string;
     sh:name "transactionIdPath";
     sh:maxCount 1;
     sh:minCount 1;
   ], [
-    sh:path js:transactionEndPath;
+    sh:path rdfc:transactionEndPath;
     sh:datatype xsd:string;
     sh:name "transactionEndPath";
     sh:maxCount 1;
     sh:minCount 1;
   ].
+
