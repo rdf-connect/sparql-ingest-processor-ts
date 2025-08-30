@@ -224,7 +224,7 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
 
             // TODO: Handle change semantics(?) and transactions for non-SDS data
             this.logger.info(`Preparing 'DELETE {} WHERE {} + INSERT DATA {}' SPARQL query for received triples (${store.size})`);
-            query = UPDATE(store, this.config.forVirtuoso);
+            query = UPDATE(store, this.config.forVirtuoso, this.config.targetNamedGraph);
          }
 
          // Execute the update query
