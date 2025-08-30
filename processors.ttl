@@ -38,7 +38,6 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:datatype xsd:boolean;
     sh:name "memberIsGraph";
     sh:maxCount 1;
-    sh:minCount 1;
   ], [
     sh:path rdfc:memberShape;
     sh:datatype xsd:string;
