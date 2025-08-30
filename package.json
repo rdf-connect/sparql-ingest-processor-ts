@@ -36,7 +36,10 @@
     },
     "devDependencies": {
         "@comunica/query-sparql": "^4.3.0",
+        "@grpc/grpc-js": "^1.13.4",
         "@rdfc/js-runner": "^2.0.0",
+        "@rdfc/orchestrator-js": "^1.0.6",
+        "@rdfc/proto": "^0.1.2-alpha-1",
         "@rdfjs/types": "^2.0.1",
         "@types/n3": "^1.26.0",
         "@types/node": "^24.3.0",
