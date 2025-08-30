@@ -1,6 +1,6 @@
 {
     "name": "@rdfc/sparql-ingest-processor-ts",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "description": "SPARQL Update function to be within RDF-Connect pipelines",
     "author": "Julián Rojas",
     "contributors": [
