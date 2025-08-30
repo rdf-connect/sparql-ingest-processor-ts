@@ -218,9 +218,7 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
 
         const memberStream = new ReaderInstance("memberStream", client, logger);
         const sparqlWriter = new WriterInstance("sparqlWriter", client, writeable, logger);
-        const config: IngestConfig = {
-            memberIsGraph: false
-        };
+        const config: IngestConfig = {};
 
         // Add some data to the local triple store first
         const localStore = RdfStore.createDefault();
@@ -387,7 +385,6 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         const memberStream = new ReaderInstance("memberStream", client, logger);
         const sparqlWriter = new WriterInstance("sparqlWriter", client, writeable, logger);
         const config: IngestConfig = {
-            memberIsGraph: false,
             forVirtuoso: true,
             graphStoreUrl: "http://localhost:3000/sparql",
         };
@@ -750,6 +747,68 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         await memberStream.handleMsg(member);
 
         await processingPromise;
+    });
+
+    test("Default DELETE/INSERT for non-SDS data into an empty SPARQL endpoint having a large member insert", async () => {
+        // Function to get the generated data from the processor
+        const writeable: Writable = async (msg) => {
+            // Decode the received query
+            const query = Buffer.from(msg.msg!.data).toString('utf-8');
+
+            // Check the query was splited properly
+            expect(query.split("INSERT DATA").length).toBe(5)
+            // Execute produced SPARQL query
+            await myEngine.queryVoid(query, {
+                sources: [localStore],
+            });
+            // Query the triple store to verify that triples were updated properly
+            const stream = await myEngine.queryBindings("SELECT (COUNT(*) AS ?count) WHERE { ?s ?p ?o }", {
+                sources: [localStore],
+            });
+
+            for await (const bindings of stream) {
+                const count = bindings.get("count");
+                expect(parseInt(count!.value)).toBe(1828);
+            }
+
+            // Close the member stream
+            await memberStream.close();
+        };
+
+        const memberStream = new ReaderInstance("memberStream", client, logger);
+        const sparqlWriter = new WriterInstance("sparqlWriter", client, writeable, logger);
+        const config: IngestConfig = {
+            forVirtuoso: true,
+            graphStoreUrl: "http://localhost:3000/sparql",
+        };
+
+        // Local RDF store and SPARQL engine to verify the results
+        const localStore = RdfStore.createDefault();
+        const myEngine = new QueryEngine();
+
+        // Execute processor function
+        const sparqlIngest = new SPARQLIngest({
+            memberStream,
+            config,
+            sparqlWriter
+        }, logger);
+
+        // Initialize and start the processor
+        await sparqlIngest.init.call(sparqlIngest);
+        // Start the processing function
+        const processingPromise = sparqlIngest.transform.call(sparqlIngest);
+
+        // Encode and push a large member from disk
+        const member = Message.create({
+            channel: "memberStream",
+            data: Buffer.from((await readFile("./tests/data/non-sds-data.nq", "utf-8")), 'utf-8')
+        });
+        await memberStream.handleMsg(member);
+
+        await processingPromise;
+
+        // Check that the number of requests made to the mock server is correct
+        expect(reqCount).toBe(1);
     });
 
     test("Transaction-aware SDS Member ingestion into a SPARQL endpoint (with shape description for deletes)", async () => {

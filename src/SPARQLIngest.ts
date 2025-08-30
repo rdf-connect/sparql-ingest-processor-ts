@@ -1,14 +1,14 @@
-import {extendLogger, Processor, Reader, Writer} from "@rdfc/js-runner";
-import {SDS} from "@treecg/types";
-import {DataFactory} from "rdf-data-factory";
-import {RdfStore} from "rdf-stores";
-import {Parser} from "n3";
-import {writeFile} from "fs/promises";
-import {CREATE, DELETE, UPDATE} from "./SPARQLQueries";
-import {doSPARQLRequest, getObjects, sanitizeQuads} from "./Utils";
+import { extendLogger, Processor, Reader, Writer } from "@rdfc/js-runner";
+import { SDS } from "@treecg/types";
+import { DataFactory } from "rdf-data-factory";
+import { RdfStore } from "rdf-stores";
+import { Parser } from "n3";
+import { writeFile } from "fs/promises";
+import { CREATE, DELETE, UPDATE } from "./SPARQLQueries";
+import { doSPARQLRequest, getObjects, sanitizeQuads } from "./Utils";
 
-import type {Quad_Subject, Term} from "@rdfjs/types";
-import {Logger} from "winston";
+import type { Quad_Subject, Term } from "@rdfjs/types";
+import { Logger } from "winston";
 
 const df = new DataFactory();
 
@@ -34,7 +34,7 @@ export type PerformanceConfig = {
 };
 
 export type IngestConfig = {
-   memberIsGraph: boolean;
+   memberIsGraph?: boolean;
    memberShapes?: string[]; // TODO: This should be obtained from an SDS metadata stream
    changeSemantics?: ChangeSemantics;
    targetNamedGraph?: string;
@@ -77,12 +77,16 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
          const store = RdfStore.createDefault();
          quads.forEach(q => store.addQuad(q));
 
-         // Get member IRI form SDS description
+         // Variable that will hold the full query to be executed
+         let query: string[] | undefined;
+
+         // Get member IRI form SDS description (if any)
          const memberIRI = getObjects(store, null, SDS.terms.payload, SDS.terms.custom("DataDescription"))[0];
-         this.logger.verbose(`Member IRI found: ${memberIRI ? memberIRI.value : "none"}`);
-         // TODO: produce some SDS metadata about the processing taking place here
 
          if (memberIRI) {
+            this.logger.verbose(`Member IRI found in SDS metadata: ${memberIRI.value}`);
+            // TODO: produce some SDS metadata about the processing taking place here
+
             // Remove SDS wrapper quads
             const sdsQuads = store.getQuads(null, null, null, SDS.terms.custom("DataDescription"));
             sdsQuads.forEach(q => store.removeQuad(q));
@@ -166,9 +170,6 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
                }
             }
 
-            // Variable that will hold the full query to be executed
-            let query: string[] | undefined;
-
             if (this.config.changeSemantics) {
                if (this.transactionMembers.length > 0) {
                   query = [this.createTransactionQueries(this.transactionMembers, this.config)];
@@ -218,40 +219,43 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
                   query = UPDATE(store, this.config.forVirtuoso, ng);
                }
             }
+         } else {
+            // Non-SDS data
 
-            // Execute the update query
-            if (query && query.length > 0) {
-               this.logger.debug(`Complete SPARQL query generated for received member: \n${query.join("\n")}`);
-               if (this.config.graphStoreUrl) {
-                  try {
-                     const t0 = Date.now();
-                     await doSPARQLRequest(query, this.config, this.doSPARQLRequestLogger);
-                     const reqTime = Date.now() - t0;
+            // TODO: Handle change semantics(?) and transactions for non-SDS data
+            this.logger.info(`Preparing 'DELETE {} WHERE {} + INSERT DATA {}' SPARQL query for received triples (${store.size})`);
+            query = UPDATE(store, this.config.forVirtuoso);
+         }
+
+         // Execute the update query
+         if (query && query.length > 0) {
+            this.logger.debug(`Complete SPARQL query generated for received member: \n${query.join("\n")}`);
+            if (this.config.graphStoreUrl) {
+               try {
+                  const t0 = Date.now();
+                  await doSPARQLRequest(query, this.config, this.doSPARQLRequestLogger);
+                  const reqTime = Date.now() - t0;
+                  if (this.config.measurePerformance) {
+                     this.requestsPerformance.push(reqTime);
+                  }
+                  this.logger.info(`Executed query on remote SPARQL server ${this.config.graphStoreUrl} (took ${reqTime} ms)`);
+               } catch (error) {
+                  if (!this.config.measurePerformance || this.config.measurePerformance.failureIsFatal) {
+                     this.logger.error(`Error executing query on remote SPARQL server ${this.config.graphStoreUrl}: ${error}`);
+                     throw error;
+                  } else {
                      if (this.config.measurePerformance) {
-                        this.requestsPerformance.push(reqTime);
-                     }
-                     this.logger.info(`Executed query on remote SPARQL server ${this.config.graphStoreUrl} (took ${reqTime} ms)`);
-                  } catch (error) {
-                     if (!this.config.measurePerformance || this.config.measurePerformance.failureIsFatal) {
-                        this.logger.error(`Error executing query on remote SPARQL server ${this.config.graphStoreUrl}: ${error}`);
-                        throw error;
-                     } else {
-                        if (this.config.measurePerformance) {
-                           this.requestsPerformance.push(-1); // -1 indicates a failure
-                        }
+                        this.requestsPerformance.push(-1); // -1 indicates a failure
                      }
                   }
                }
+            }
 
-               if (this.sparqlWriter) {
-                  await this.sparqlWriter.string(query.join("\n"));
-               }
-            } else {
-               this.logger.warn(`No query generated for member ${memberIRI.value}`);
+            if (this.sparqlWriter) {
+               await this.sparqlWriter.string(query.join("\n"));
             }
          } else {
-            this.logger.error(`No member IRI found in received RDF data: \n${rawQuads}`);
-            throw new Error(`[sparqlIngest] No member IRI found in received RDF data: \n${rawQuads}`);
+            this.logger.warn(`No query generated for member ${memberIRI.value}`);
          }
       }
 
@@ -289,7 +293,7 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
 
    getNamedGraphIfAny(
       memberIRI: Term,
-      memberIsGraph: boolean,
+      memberIsGraph: boolean | undefined,
       targetNamedGraph?: string
    ): string | undefined {
       let ng;
