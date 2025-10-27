@@ -150,7 +150,7 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
                         transactionId: transactionId.value,
                         store
                      });
-                     return;
+                     continue;
                   } else {
                      this.logger.info(`New transaction ${transactionId.value} started!`);
                      if (this.transactionMembers.length > 0) {
@@ -165,7 +165,7 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
                         transactionId: transactionId.value,
                         store
                      });
-                     return;
+                     continue;
                   }
                }
             }
