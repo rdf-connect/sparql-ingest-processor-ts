@@ -1,10 +1,8 @@
 import { describe, test, expect, afterAll, beforeAll, afterEach } from "vitest";
 import { fastify } from "fastify";
 import { readFile } from "fs/promises";
-import { credentials } from "@grpc/grpc-js";
-import { RunnerClient, Message } from "@rdfc/proto";
-import { WriterInstance, ReaderInstance } from "@rdfc/js-runner";
-import winston from 'winston'
+import { channel, createRunner } from "@rdfc/js-runner/lib/testUtils"
+import * as winston from 'winston'
 import { DataFactory } from "rdf-data-factory";
 import { RdfStore } from "rdf-stores";
 import { Writer as N3Writer, Parser } from "n3";
@@ -12,7 +10,7 @@ import { QueryEngine } from "@comunica/query-sparql";
 import { SPARQLIngest } from "../src/SPARQLIngest";
 import { SDS } from "@treecg/types";
 
-import type { Writable } from "@rdfc/js-runner";
+import type { FullProc, Reader } from "@rdfc/js-runner";
 import type { FastifyInstance } from "fastify";
 import type { IngestConfig } from "../src/SPARQLIngest";
 
@@ -38,10 +36,9 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
     let server: FastifyInstance;
     let reqCount = 0;
 
-    // gRPC client and logger
-    const client = new RunnerClient("localhost:50051", credentials.createInsecure());
     const logger = winston.createLogger({
         transports: [new winston.transports.Console()],
+        level: "debug"
     });
 
     beforeAll(async () => {
@@ -83,50 +80,53 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
 
     test("SDS Member INSERT into a SPARQL endpoint", async () => {
         // Function to get the generated data from the processor
-        const writeable: Writable = async (msg) => {
-            // Decode the received query
-            const query = Buffer.from(msg.msg!.data).toString('utf-8');
+        const checkOutput = async (reader: Reader) => {
+            for await (const query of reader.strings()) {
+                // Execute produced SPARQL query
+                await myEngine.queryVoid(query, {
+                    sources: [localStore],
+                });
 
-            // Execute produced SPARQL query
-            await myEngine.queryVoid(query, {
-                sources: [localStore],
-            });
+                // Query the triple store to verify that triples were inserted
+                const stream = await myEngine.queryBindings("SELECT * WHERE { ?s ?p ?o }", {
+                    sources: [localStore],
+                });
 
-            // Query the triple store to verify that triples were inserted
-            const stream = await myEngine.queryBindings("SELECT * WHERE { ?s ?p ?o }", {
-                sources: [localStore],
-            });
+                let sawEntity = false;
+                let sawProp2 = false;
+                let sawNestedType = false;
 
-            let sawEntity = false;
-            let sawProp2 = false;
-            let sawNestedType = false;
+                for await (const bindings of stream) {
+                    const s = bindings.get("s");
+                    const p = bindings.get("p");
+                    const o = bindings.get("o");
 
-            for await (const bindings of stream) {
-                const s = bindings.get("s");
-                const p = bindings.get("p");
-                const o = bindings.get("o");
-
-                if (s?.value === "https://example.org/entity/Entity_0") {
-                    sawEntity = true;
+                    if (s?.value === "https://example.org/entity/Entity_0") {
+                        sawEntity = true;
+                    }
+                    if (p?.value === "https://example.org/ns#prop2") {
+                        sawProp2 = true;
+                    }
+                    if (o?.value === "https://example.org/ns#NestedEntity") {
+                        sawNestedType = true;
+                    }
                 }
-                if (p?.value === "https://example.org/ns#prop2") {
-                    sawProp2 = true;
-                }
-                if (o?.value === "https://example.org/ns#NestedEntity") {
-                    sawNestedType = true;
-                }
+
+                expect(sawEntity).toBeTruthy();
+                expect(sawProp2).toBeTruthy();
+                expect(sawNestedType).toBeTruthy();
+
+                // Close the member stream
+                await mmeberStreamWriter.close();
             }
-
-            expect(sawEntity).toBeTruthy();
-            expect(sawProp2).toBeTruthy();
-            expect(sawNestedType).toBeTruthy();
-
-            // Close the member stream
-            await memberStream.close();
         };
 
-        const memberStream = new ReaderInstance("memberStream", client, logger);
-        const sparqlWriter = new WriterInstance("sparqlWriter", client, writeable, logger);
+        const runner = createRunner();
+        const [mmeberStreamWriter, memberStream] = channel(runner, "members");
+        const [sparqlWriter, memberStreamReader] = channel(runner, "queries");
+
+        checkOutput(memberStreamReader);
+
         const config: IngestConfig = {
             memberIsGraph: false,
             changeSemantics: {
@@ -142,26 +142,22 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         const myEngine = new QueryEngine();
 
         // Execute processor function
-        const sparqlIngest = new SPARQLIngest({
+        const sparqlIngest = <FullProc<SPARQLIngest>>new SPARQLIngest({
             memberStream,
             config,
             sparqlWriter
         }, logger);
         // Initialize and start the processor
-        await sparqlIngest.init.call(sparqlIngest);
+        await sparqlIngest.init();
         // Start the processing function
-        const processingPromise = sparqlIngest.transform.call(sparqlIngest);
-
-        // Push 1 members for ingestion
-        const member = Message.create({
-            channel: "memberStream",
-            data: Buffer.from(dataGenerator({
+        const processingPromise = sparqlIngest.transform();
+        mmeberStreamWriter.string(
+            dataGenerator({
                 changeType: config.changeSemantics!.createValue,
                 includeAllProps: true,
                 withMetadata: true,
-            }), 'utf-8')
-        });
-        await memberStream.handleMsg(member);
+            }
+            ));
 
         // Wait until the processing is done
         await processingPromise;
@@ -169,55 +165,58 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
 
     test("Default SDS Member DELETE/INSERT into a populated SPARQL endpoint", async () => {
         // Function to get the generated data from the processor
-        const writeable: Writable = async (msg) => {
-            // Decode the received query
-            const query = Buffer.from(msg.msg!.data).toString('utf-8');
+        const checkOutput = async (reader: Reader) => {
+            for await (const query of reader.strings()) {
 
-            // Execute produced SPARQL query
-            await myEngine.queryVoid(query, {
-                sources: [localStore],
-            });
+                // Execute produced SPARQL query
+                await myEngine.queryVoid(query, {
+                    sources: [localStore],
+                });
 
-            // Query the triple store to verify that triples were updated properly
-            const stream = await myEngine.queryBindings("SELECT * WHERE { ?s ?p ?o }", {
-                sources: [localStore],
-            });
+                // Query the triple store to verify that triples were updated properly
+                const stream = await myEngine.queryBindings("SELECT * WHERE { ?s ?p ?o }", {
+                    sources: [localStore],
+                });
 
-            let sawEntity = false;
-            let sawProp2 = false;
-            let sawNestedType = false;
-            let sawNewProp = false;
+                let sawEntity = false;
+                let sawProp2 = false;
+                let sawNestedType = false;
+                let sawNewProp = false;
 
-            for await (const bindings of stream) {
-                const s = bindings.get("s");
-                const p = bindings.get("p");
-                const o = bindings.get("o");
+                for await (const bindings of stream) {
+                    const s = bindings.get("s");
+                    const p = bindings.get("p");
+                    const o = bindings.get("o");
 
-                if (s?.value === "https://example.org/entity/Entity_0") {
-                    sawEntity = true;
+                    if (s?.value === "https://example.org/entity/Entity_0") {
+                        sawEntity = true;
+                    }
+                    if (p?.value === "https://example.org/ns#prop2") {
+                        sawProp2 = true;
+                    }
+                    if (p?.value === "https://example.org/ns#newProp") {
+                        sawNewProp = true;
+                    }
+                    if (o?.value === "https://example.org/ns#NestedEntity") {
+                        sawNestedType = true;
+                    }
                 }
-                if (p?.value === "https://example.org/ns#prop2") {
-                    sawProp2 = true;
-                }
-                if (p?.value === "https://example.org/ns#newProp") {
-                    sawNewProp = true;
-                }
-                if (o?.value === "https://example.org/ns#NestedEntity") {
-                    sawNestedType = true;
-                }
+
+                expect(sawEntity).toBeTruthy();
+                expect(sawProp2).toBeTruthy();
+                expect(sawNewProp).toBeTruthy();
+                expect(sawNestedType).toBeTruthy();
+
+                // Close the member stream
+                await mmeberStreamWriter.close();
             }
-
-            expect(sawEntity).toBeTruthy();
-            expect(sawProp2).toBeTruthy();
-            expect(sawNewProp).toBeTruthy();
-            expect(sawNestedType).toBeTruthy();
-
-            // Close the member stream
-            await memberStream.close();
         };
 
-        const memberStream = new ReaderInstance("memberStream", client, logger);
-        const sparqlWriter = new WriterInstance("sparqlWriter", client, writeable, logger);
+        const runner = createRunner();
+        const [mmeberStreamWriter, memberStream] = channel(runner, "members");
+        const [sparqlWriter, memberStreamReader] = channel(runner, "queries");
+        checkOutput(memberStreamReader);
+
         const config: IngestConfig = {};
 
         // Add some data to the local triple store first
@@ -253,68 +252,67 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
                 df.literal("Updated value")
             )
         );
-        // Encode and push the updated member
-        const member = Message.create({
-            channel: "memberStream",
-            data: Buffer.from(new N3Writer().quadsToString(store.getQuads()), 'utf-8')
-        });
-        await memberStream.handleMsg(member);
 
+        mmeberStreamWriter.string(new N3Writer().quadsToString(store.getQuads()));
         // Wait until the processing is done
         await processingPromise;
     });
 
     test("Default SDS Member DELETE/INSERT into an empty SPARQL endpoint", async () => {
         // Function to get the generated data from the processor
-        const writeable: Writable = async (msg) => {
-            // Decode the received query
-            const query = Buffer.from(msg.msg!.data).toString('utf-8');
+        const checkOutput = async (reader: Reader) => {
+            for await (const query of reader.strings()) {
 
-            // Execute produced SPARQL query
-            await myEngine.queryVoid(query, {
-                sources: [localStore],
-            });
+                // Execute produced SPARQL query
+                await myEngine.queryVoid(query, {
+                    sources: [localStore],
+                });
 
-            // Query the triple store to verify that triples were updated properly
-            const stream = await myEngine.queryBindings("SELECT * WHERE { ?s ?p ?o }", {
-                sources: [localStore],
-            });
+                // Query the triple store to verify that triples were updated properly
+                const stream = await myEngine.queryBindings("SELECT * WHERE { ?s ?p ?o }", {
+                    sources: [localStore],
+                });
 
-            let sawEntity = false;
-            let sawProp2 = false;
-            let sawNestedType = false;
-            let sawNewProp = false;
+                let sawEntity = false;
+                let sawProp2 = false;
+                let sawNestedType = false;
+                let sawNewProp = false;
 
-            for await (const bindings of stream) {
-                const s = bindings.get("s");
-                const p = bindings.get("p");
-                const o = bindings.get("o");
+                for await (const bindings of stream) {
+                    const s = bindings.get("s");
+                    const p = bindings.get("p");
+                    const o = bindings.get("o");
 
-                if (s?.value === "https://example.org/entity/Entity_0") {
-                    sawEntity = true;
+                    if (s?.value === "https://example.org/entity/Entity_0") {
+                        sawEntity = true;
+                    }
+                    if (p?.value === "https://example.org/ns#prop2") {
+                        sawProp2 = true;
+                    }
+                    if (p?.value === "https://example.org/ns#newProp") {
+                        sawNewProp = true;
+                    }
+                    if (o?.value === "https://example.org/ns#NestedEntity") {
+                        sawNestedType = true;
+                    }
                 }
-                if (p?.value === "https://example.org/ns#prop2") {
-                    sawProp2 = true;
-                }
-                if (p?.value === "https://example.org/ns#newProp") {
-                    sawNewProp = true;
-                }
-                if (o?.value === "https://example.org/ns#NestedEntity") {
-                    sawNestedType = true;
-                }
-            }
 
-            expect(sawEntity).toBeTruthy();
-            expect(sawProp2).toBeTruthy();
-            expect(sawNewProp).toBeTruthy();
-            expect(sawNestedType).toBeTruthy();
+                expect(sawEntity).toBeTruthy();
+                expect(sawProp2).toBeTruthy();
+                expect(sawNewProp).toBeTruthy();
+                expect(sawNestedType).toBeTruthy();
 
-            // Close the member stream
-            await memberStream.close();
-        };
+                // Close the member stream
+                await mmeberStreamWriter.close();
+            };
+        }
 
-        const memberStream = new ReaderInstance("memberStream", client, logger);
-        const sparqlWriter = new WriterInstance("sparqlWriter", client, writeable, logger);
+        const runner = createRunner();
+        const [mmeberStreamWriter, memberStream] = channel(runner, "members");
+        const [sparqlWriter, memberStreamReader] = channel(runner, "queries");
+
+        checkOutput(memberStreamReader);
+
         const config: IngestConfig = {
             memberIsGraph: false
         };
@@ -346,44 +344,42 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
                 df.literal("Updated value")
             )
         );
-        // Encode and push the updated member
-        const member = Message.create({
-            channel: "memberStream",
-            data: Buffer.from(new N3Writer().quadsToString(store.getQuads()), 'utf-8')
-        });
-        await memberStream.handleMsg(member);
 
+        mmeberStreamWriter.string(new N3Writer().quadsToString(store.getQuads()));
         await processingPromise;
     });
 
     test("Default SDS Member DELETE/INSERT into an empty SPARQL endpoint having a large member insert", async () => {
-        // Function to get the generated data from the processor
-        const writeable: Writable = async (msg) => {
-            // Decode the received query
-            const query = Buffer.from(msg.msg!.data).toString('utf-8');
+        const checkOutput = async (reader: Reader) => {
+            for await (const query of reader.strings()) {
 
-            // Check the query was splited properly
-            expect(query.split("INSERT DATA").length).toBe(5)
-            // Execute produced SPARQL query
-            await myEngine.queryVoid(query, {
-                sources: [localStore],
-            });
-            // Query the triple store to verify that triples were updated properly
-            const stream = await myEngine.queryBindings("SELECT (COUNT(*) AS ?count) WHERE { ?s ?p ?o }", {
-                sources: [localStore],
-            });
+                // Check the query was splited properly
+                expect(query.split("INSERT DATA").length).toBe(5)
+                // Execute produced SPARQL query
+                await myEngine.queryVoid(query, {
+                    sources: [localStore],
+                });
+                // Query the triple store to verify that triples were updated properly
+                const stream = await myEngine.queryBindings("SELECT (COUNT(*) AS ?count) WHERE { ?s ?p ?o }", {
+                    sources: [localStore],
+                });
 
-            for await (const bindings of stream) {
-                const count = bindings.get("count");
-                expect(parseInt(count!.value)).toBe(1828);
+                for await (const bindings of stream) {
+                    const count = bindings.get("count");
+                    expect(parseInt(count!.value)).toBe(1828);
+                }
+
+                // Close the member stream
+                await mmeberStreamWriter.close();
             }
-
-            // Close the member stream
-            await memberStream.close();
         };
 
-        const memberStream = new ReaderInstance("memberStream", client, logger);
-        const sparqlWriter = new WriterInstance("sparqlWriter", client, writeable, logger);
+        const runner = createRunner();
+        const [mmeberStreamWriter, memberStream] = channel(runner, "members");
+        const [sparqlWriter, memberStreamReader] = channel(runner, "queries");
+
+        checkOutput(memberStreamReader);
+
         const config: IngestConfig = {
             forVirtuoso: true,
             graphStoreUrl: "http://localhost:3000/sparql",
@@ -404,13 +400,9 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         await sparqlIngest.init.call(sparqlIngest);
         // Start the processing function
         const processingPromise = sparqlIngest.transform.call(sparqlIngest);
-
-        // Encode and push a large member from disk
-        const member = Message.create({
-            channel: "memberStream",
-            data: Buffer.from((await readFile("./tests/data/large-member.nq", "utf-8")), 'utf-8')
-        });
-        await memberStream.handleMsg(member);
+        mmeberStreamWriter.string(
+            await readFile("./tests/data/large-member.nq", "utf-8")
+        );
 
         await processingPromise;
 
@@ -420,32 +412,34 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
 
     test("Default SDS Member DELETE/INSERT into an empty SPARQL endpoint having a very large member insert", async () => {
         // Function to get the generated data from the processor
-        const writeable: Writable = async (msg) => {
-            // Decode the received query
-            const query = Buffer.from(msg.msg!.data).toString('utf-8');
+        const checkOutput = async (reader: Reader) => {
+            for await (const query of reader.strings()) {
+                // Check the query was splited properly
+                expect(query.split("INSERT DATA").length).toBe(24)
+                // Execute produced SPARQL query
+                await myEngine.queryVoid(query, {
+                    sources: [localStore],
+                });
+                // Query the triple store to verify that triples were updated properly
+                const stream = await myEngine.queryBindings("SELECT (COUNT(*) AS ?count) WHERE { ?s ?p ?o }", {
+                    sources: [localStore],
+                });
 
-            // Check the query was splited properly
-            expect(query.split("INSERT DATA").length).toBe(24)
-            // Execute produced SPARQL query
-            await myEngine.queryVoid(query, {
-                sources: [localStore],
-            });
-            // Query the triple store to verify that triples were updated properly
-            const stream = await myEngine.queryBindings("SELECT (COUNT(*) AS ?count) WHERE { ?s ?p ?o }", {
-                sources: [localStore],
-            });
+                for await (const bindings of stream) {
+                    const count = bindings.get("count");
+                    expect(parseInt(count!.value)).toBe(11083);
+                }
 
-            for await (const bindings of stream) {
-                const count = bindings.get("count");
-                expect(parseInt(count!.value)).toBe(11083);
+                // Close the member stream
+                await mmeberStreamWriter.close();
             }
-
-            // Close the member stream
-            await memberStream.close();
         };
 
-        const memberStream = new ReaderInstance("memberStream", client, logger);
-        const sparqlWriter = new WriterInstance("sparqlWriter", client, writeable, logger);
+        const runner = createRunner();
+        const [mmeberStreamWriter, memberStream] = channel(runner, "members");
+        const [sparqlWriter, memberStreamReader] = channel(runner, "queries");
+
+        checkOutput(memberStreamReader);
         const config: IngestConfig = {
             memberIsGraph: false,
             forVirtuoso: true,
@@ -468,13 +462,7 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         // Start the processing function
         const processingPromise = sparqlIngest.transform.call(sparqlIngest);
 
-        // Encode and push a large member from disk
-        const member = Message.create({
-            channel: "memberStream",
-            data: Buffer.from((await readFile("./tests/data/very-large-member.nq", "utf-8")), 'utf-8')
-        });
-        await memberStream.handleMsg(member);
-
+        mmeberStreamWriter.string(await readFile("./tests/data/very-large-member.nq", "utf-8"));
         await processingPromise;
 
         // Check that the number of requests made to the mock server is correct
@@ -483,37 +471,40 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
 
     test("SDS Member DELETE without shape and including all properties in a SPARQL endpoint", async () => {
         // Function to get the generated data from the processor
-        const writeable: Writable = async (msg) => {
-            // Decode the received query
-            const query = Buffer.from(msg.msg!.data).toString('utf-8');
+        const checkOutput = async (reader: Reader) => {
+            for await (const query of reader.strings()) {
 
-            // Execute produced SPARQL query
-            await myEngine.queryVoid(query, {
-                sources: [localStore],
-            });
+                // Execute produced SPARQL query
+                await myEngine.queryVoid(query, {
+                    sources: [localStore],
+                });
 
-            // Query the triple store to verify that triples were deleted properly
-            const stream = await myEngine.queryBindings("SELECT * WHERE { ?s ?p ?o }", {
-                sources: [localStore],
-            });
+                // Query the triple store to verify that triples were deleted properly
+                const stream = await myEngine.queryBindings("SELECT * WHERE { ?s ?p ?o }", {
+                    sources: [localStore],
+                });
 
-            let counter = 0;
+                let counter = 0;
 
-            for await (const bindings of stream) {
-                const s = bindings.get("s");
-                const p = bindings.get("p");
-                const o = bindings.get("o");
-                counter++;
+                for await (const bindings of stream) {
+                    const s = bindings.get("s");
+                    const p = bindings.get("p");
+                    const o = bindings.get("o");
+                    counter++;
+                }
+
+                expect(counter).toBe(0);
+
+                // Close the member stream
+                await mmeberStreamWriter.close();
             }
-
-            expect(counter).toBe(0);
-
-            // Close the member stream
-            await memberStream.close();
         };
 
-        const memberStream = new ReaderInstance("memberStream", client, logger);
-        const sparqlWriter = new WriterInstance("sparqlWriter", client, writeable, logger);
+        const runner = createRunner();
+        const [mmeberStreamWriter, memberStream] = channel(runner, "members");
+        const [sparqlWriter, memberStreamReader] = channel(runner, "queries");
+
+        checkOutput(memberStreamReader);
         const config: IngestConfig = {
             memberIsGraph: false,
             changeSemantics: {
@@ -544,51 +535,51 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         // Start the processing function
         const processingPromise = sparqlIngest.transform.call(sparqlIngest);
 
-        // Push 1 members for ingestion
-        const member = Message.create({
-            channel: "memberStream",
-            data: Buffer.from(dataGenerator({
+        mmeberStreamWriter.string(
+            dataGenerator({
                 changeType: config.changeSemantics!.deleteValue,
                 includeAllProps: true,
                 includeBlankNodes: true,
                 withMetadata: true,
-            }), 'utf-8')
-        });
-        await memberStream.handleMsg(member);
+            })
+        );
 
         await processingPromise;
     });
 
     test("SDS Member DELETE with declared shape and type in a SPARQL endpoint", async () => {
-        // Function to get the generated data from the processor
-        const writeable: Writable = async (msg) => {
-            // Decode the received query
-            const query = Buffer.from(msg.msg!.data).toString('utf-8');
+        const checkOutput = async (reader: Reader) => {
+            for await (const query of reader.strings()) {
 
-            // Execute produced SPARQL query
-            await myEngine.queryVoid(query, {
-                sources: [localStore],
-            });
+                // Execute produced SPARQL query
+                await myEngine.queryVoid(query, {
+                    sources: [localStore],
+                });
 
-            // Query the triple store to verify that triples were deleted properly
-            const stream = await myEngine.queryBindings("SELECT * WHERE { ?s ?p ?o }", {
-                sources: [localStore],
-            });
+                // Query the triple store to verify that triples were deleted properly
+                const stream = await myEngine.queryBindings("SELECT * WHERE { ?s ?p ?o }", {
+                    sources: [localStore],
+                });
 
-            let counter = 0;
+                let counter = 0;
 
-            for await (const bindings of stream) {
-                counter++;
+                for await (const bindings of stream) {
+                    counter++;
+                }
+
+                expect(counter).toBe(0);
+
+                // Close the member stream
+                await mmeberStreamWriter.close();
             }
-
-            expect(counter).toBe(0);
-
-            // Close the member stream
-            await memberStream.close();
         };
 
-        const memberStream = new ReaderInstance("memberStream", client, logger);
-        const sparqlWriter = new WriterInstance("sparqlWriter", client, writeable, logger);
+        const runner = createRunner();
+        const [mmeberStreamWriter, memberStream] = channel(runner, "members");
+        const [sparqlWriter, memberStreamReader] = channel(runner, "queries");
+
+        checkOutput(memberStreamReader);
+
         const config: IngestConfig = {
             memberIsGraph: false,
             memberShapes: [
@@ -626,50 +617,49 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         // Start the processing function
         const processingPromise = sparqlIngest.transform.call(sparqlIngest);
 
-        // Push 1 property-less (only type and change type) member for ingestion
-        const member = Message.create({
-            channel: "memberStream",
-            data: Buffer.from(dataGenerator({
+        mmeberStreamWriter.string(
+            dataGenerator({
                 changeType: config.changeSemantics!.deleteValue,
                 includeAllProps: false,
                 withMetadata: true,
-            }), 'utf-8')
-        });
-        await memberStream.handleMsg(member);
+            })
+        );
 
         await processingPromise;
     });
 
     test("SDS Member DELETE with declared shape and no type in a SPARQL endpoint", async () => {
-        // Function to get the generated data from the processor
-        const writeable: Writable = async (msg) => {
-            // Decode the received query
-            const query = Buffer.from(msg.msg!.data).toString('utf-8');
+        const checkOutput = async (reader: Reader) => {
+            for await (const query of reader.strings()) {
 
-            // Execute produced SPARQL query
-            await myEngine.queryVoid(query, {
-                sources: [localStore],
-            });
+                // Execute produced SPARQL query
+                await myEngine.queryVoid(query, {
+                    sources: [localStore],
+                });
 
-            // Query the triple store to verify that triples were deleted properly
-            const stream = await myEngine.queryBindings("SELECT * WHERE { ?s ?p ?o }", {
-                sources: [localStore],
-            });
+                // Query the triple store to verify that triples were deleted properly
+                const stream = await myEngine.queryBindings("SELECT * WHERE { ?s ?p ?o }", {
+                    sources: [localStore],
+                });
 
-            let counter = 0;
+                let counter = 0;
 
-            for await (const bindings of stream) {
-                counter++;
+                for await (const bindings of stream) {
+                    counter++;
+                }
+
+                expect(counter).toBe(0);
+
+                // Close the member stream
+                await mmeberStreamWriter.close();
             }
-
-            expect(counter).toBe(0);
-
-            // Close the member stream
-            await memberStream.close();
         };
 
-        const memberStream = new ReaderInstance("memberStream", client, logger);
-        const sparqlWriter = new WriterInstance("sparqlWriter", client, writeable, logger);
+        const runner = createRunner();
+        const [mmeberStreamWriter, memberStream] = channel(runner, "members");
+        const [sparqlWriter, memberStreamReader] = channel(runner, "queries");
+
+        checkOutput(memberStreamReader);
         const config: IngestConfig = {
             memberIsGraph: false,
             memberShapes: [
@@ -739,44 +729,42 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
             )
         );
 
-        // Encode and push the updated member
-        const member = Message.create({
-            channel: "memberStream",
-            data: Buffer.from(new N3Writer().quadsToString(store.getQuads()), 'utf-8')
-        });
-        await memberStream.handleMsg(member);
+        mmeberStreamWriter.string(new N3Writer().quadsToString(store.getQuads()));
 
         await processingPromise;
     });
 
     test("Default DELETE/INSERT for non-SDS data into an empty SPARQL endpoint having a large member insert", async () => {
         // Function to get the generated data from the processor
-        const writeable: Writable = async (msg) => {
-            // Decode the received query
-            const query = Buffer.from(msg.msg!.data).toString('utf-8');
+        const checkOutput = async (reader: Reader) => {
+            for await (const query of reader.strings()) {
 
-            // Check the query was splited properly
-            expect(query.split("INSERT DATA").length).toBe(5)
-            // Execute produced SPARQL query
-            await myEngine.queryVoid(query, {
-                sources: [localStore],
-            });
-            // Query the triple store to verify that triples were updated properly
-            const stream = await myEngine.queryBindings("SELECT (COUNT(*) AS ?count) WHERE { ?s ?p ?o }", {
-                sources: [localStore],
-            });
+                // Check the query was splited properly
+                expect(query.split("INSERT DATA").length).toBe(5)
+                // Execute produced SPARQL query
+                await myEngine.queryVoid(query, {
+                    sources: [localStore],
+                });
+                // Query the triple store to verify that triples were updated properly
+                const stream = await myEngine.queryBindings("SELECT (COUNT(*) AS ?count) WHERE { ?s ?p ?o }", {
+                    sources: [localStore],
+                });
 
-            for await (const bindings of stream) {
-                const count = bindings.get("count");
-                expect(parseInt(count!.value)).toBe(1828);
+                for await (const bindings of stream) {
+                    const count = bindings.get("count");
+                    expect(parseInt(count!.value)).toBe(1828);
+                }
+
+                // Close the member stream
+                await mmeberStreamWriter.close();
             }
-
-            // Close the member stream
-            await memberStream.close();
         };
 
-        const memberStream = new ReaderInstance("memberStream", client, logger);
-        const sparqlWriter = new WriterInstance("sparqlWriter", client, writeable, logger);
+        const runner = createRunner();
+        const [mmeberStreamWriter, memberStream] = channel(runner, "members");
+        const [sparqlWriter, memberStreamReader] = channel(runner, "queries");
+
+        checkOutput(memberStreamReader);
         const config: IngestConfig = {
             forVirtuoso: true,
             graphStoreUrl: "http://localhost:3000/sparql",
@@ -798,12 +786,7 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         // Start the processing function
         const processingPromise = sparqlIngest.transform.call(sparqlIngest);
 
-        // Encode and push a large member from disk
-        const member = Message.create({
-            channel: "memberStream",
-            data: Buffer.from((await readFile("./tests/data/non-sds-data.nq", "utf-8")), 'utf-8')
-        });
-        await memberStream.handleMsg(member);
+        mmeberStreamWriter.string((await readFile("./tests/data/non-sds-data.nq", "utf-8")));
 
         await processingPromise;
 
@@ -812,33 +795,36 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
     });
 
     test("Default DELETE/INSERT for non-SDS data into an empty named graph in a SPARQL endpoint having a large member insert", async () => {
-        // Function to get the generated data from the processor
-        const writeable: Writable = async (msg) => {
-            // Decode the received query
-            const query = Buffer.from(msg.msg!.data).toString('utf-8');
+        const checkOutput = async (reader: Reader) => {
+            for await (const query of reader.strings()) {
 
-            // Check the query was splited properly
-            expect(query.split("INSERT DATA").length).toBe(5)
-            // Execute produced SPARQL query
-            await myEngine.queryVoid(query, {
-                sources: [localStore],
-            });
-            // Query the triple store to verify that triples were updated properly
-            const stream = await myEngine.queryBindings("SELECT (COUNT(*) AS ?count) WHERE { GRAPH <http://example.org/graph> {?s ?p ?o} }", {
-                sources: [localStore],
-            });
+                // Check the query was splited properly
+                expect(query.split("INSERT DATA").length).toBe(5)
+                // Execute produced SPARQL query
+                await myEngine.queryVoid(query, {
+                    sources: [localStore],
+                });
+                // Query the triple store to verify that triples were updated properly
+                const stream = await myEngine.queryBindings("SELECT (COUNT(*) AS ?count) WHERE { GRAPH <http://example.org/graph> {?s ?p ?o} }", {
+                    sources: [localStore],
+                });
 
-            for await (const bindings of stream) {
-                const count = bindings.get("count");
-                expect(parseInt(count!.value)).toBe(1828);
+                for await (const bindings of stream) {
+                    const count = bindings.get("count");
+                    expect(parseInt(count!.value)).toBe(1828);
+                }
+
+                // Close the member stream
+                await mmeberStreamWriter.close();
             }
-
-            // Close the member stream
-            await memberStream.close();
         };
 
-        const memberStream = new ReaderInstance("memberStream", client, logger);
-        const sparqlWriter = new WriterInstance("sparqlWriter", client, writeable, logger);
+        const runner = createRunner();
+        const [mmeberStreamWriter, memberStream] = channel(runner, "members");
+        const [sparqlWriter, memberStreamReader] = channel(runner, "queries");
+
+        checkOutput(memberStreamReader);
+
         const config: IngestConfig = {
             forVirtuoso: true,
             graphStoreUrl: "http://localhost:3000/sparql",
@@ -861,12 +847,7 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         // Start the processing function
         const processingPromise = sparqlIngest.transform.call(sparqlIngest);
 
-        // Encode and push a large member from disk
-        const member = Message.create({
-            channel: "memberStream",
-            data: Buffer.from((await readFile("./tests/data/non-sds-data.nq", "utf-8")), 'utf-8')
-        });
-        await memberStream.handleMsg(member);
+        mmeberStreamWriter.string((await readFile("./tests/data/non-sds-data.nq", "utf-8")));
 
         await processingPromise;
 
@@ -876,85 +857,88 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
 
     test("Transaction-aware SDS Member ingestion into a SPARQL endpoint (with shape description for deletes)", async () => {
         // Function to get the generated data from the processor
-        const writeable: Writable = async (msg) => {
-            // Decode the received query
-            const query = Buffer.from(msg.msg!.data).toString('utf-8');
+        const checkOutput = async (reader: Reader) => {
+            for await (const query of reader.strings()) {
+                console.log("GOT QUERY");
+                // Execute produced SPARQL query
+                await myEngine.queryVoid(query, {
+                    sources: [localStore],
+                });
 
-            // Execute produced SPARQL query
-            await myEngine.queryVoid(query, {
-                sources: [localStore],
-            });
+                /**
+                 * Whe should see that:
+                 * - ex:Entity_0 and ex:Entity_1 were updated
+                 * - ex:Entity_4 and ex:Entity_5 were created
+                 * - ex:Entity_2 and ex:Entity_3 were deleted
+                 */
+                // Query the triple store to verify that triples were updated properly
+                const stream = await myEngine.queryBindings("SELECT * WHERE { ?s ?p ?o }", {
+                    sources: [localStore],
+                });
 
-            /**
-             * Whe should see that:
-             * - ex:Entity_0 and ex:Entity_1 were updated
-             * - ex:Entity_4 and ex:Entity_5 were created
-             * - ex:Entity_2 and ex:Entity_3 were deleted
-             */
-            // Query the triple store to verify that triples were updated properly
-            const stream = await myEngine.queryBindings("SELECT * WHERE { ?s ?p ?o }", {
-                sources: [localStore],
-            });
+                let sawEntity0 = false;
+                let sawEntity1 = false;
+                let sawEntity2 = false;
+                let sawEntity3 = false;
+                let sawEntity4 = false;
+                let sawEntity5 = false;
+                let sawNewPropIn0 = false;
+                let sawNewPropIn1 = false;
 
-            let sawEntity0 = false;
-            let sawEntity1 = false;
-            let sawEntity2 = false;
-            let sawEntity3 = false;
-            let sawEntity4 = false;
-            let sawEntity5 = false;
-            let sawNewPropIn0 = false;
-            let sawNewPropIn1 = false;
+                for await (const bindings of stream) {
+                    const s = bindings.get("s");
+                    const p = bindings.get("p");
+                    const o = bindings.get("o");
 
-            for await (const bindings of stream) {
-                const s = bindings.get("s");
-                const p = bindings.get("p");
-                const o = bindings.get("o");
+                    if (s?.value === "https://example.org/entity/Entity_0") {
+                        sawEntity0 = true;
+                    }
+                    if (s?.value === "https://example.org/entity/Entity_1") {
+                        sawEntity1 = true;
+                    }
+                    if (s?.value === "https://example.org/entity/Entity_2") {
+                        sawEntity1 = true;
+                    }
+                    if (s?.value === "https://example.org/entity/Entity_3") {
+                        sawEntity1 = true;
+                    }
+                    if (s?.value === "https://example.org/entity/Entity_4") {
+                        sawEntity4 = true;
+                    }
+                    if (s?.value === "https://example.org/entity/Entity_5") {
+                        sawEntity5 = true;
+                    }
+                    if (s?.value === "https://example.org/entity/Entity_0"
+                        && p?.value === "https://example.org/ns#newProp"
+                        && o?.value === "Updated value") {
+                        sawNewPropIn0 = true;
+                    }
+                    if (s?.value === "https://example.org/entity/Entity_1"
+                        && p?.value === "https://example.org/ns#newProp"
+                        && o?.value === "Updated value") {
+                        sawNewPropIn1 = true;
+                    }
+                }
 
-                if (s?.value === "https://example.org/entity/Entity_0") {
-                    sawEntity0 = true;
-                }
-                if (s?.value === "https://example.org/entity/Entity_1") {
-                    sawEntity1 = true;
-                }
-                if (s?.value === "https://example.org/entity/Entity_2") {
-                    sawEntity1 = true;
-                }
-                if (s?.value === "https://example.org/entity/Entity_3") {
-                    sawEntity1 = true;
-                }
-                if (s?.value === "https://example.org/entity/Entity_4") {
-                    sawEntity4 = true;
-                }
-                if (s?.value === "https://example.org/entity/Entity_5") {
-                    sawEntity5 = true;
-                }
-                if (s?.value === "https://example.org/entity/Entity_0"
-                    && p?.value === "https://example.org/ns#newProp"
-                    && o?.value === "Updated value") {
-                    sawNewPropIn0 = true;
-                }
-                if (s?.value === "https://example.org/entity/Entity_1"
-                    && p?.value === "https://example.org/ns#newProp"
-                    && o?.value === "Updated value") {
-                    sawNewPropIn1 = true;
-                }
+                expect(sawEntity0).toBeTruthy();
+                expect(sawEntity1).toBeTruthy();
+                expect(sawEntity2).toBeFalsy();
+                expect(sawEntity3).toBeFalsy();
+                expect(sawEntity4).toBeTruthy();
+                expect(sawEntity5).toBeTruthy();
+                expect(sawNewPropIn0).toBeTruthy();
+                expect(sawNewPropIn1).toBeTruthy();
+
+                // Close the member stream
             }
-
-            expect(sawEntity0).toBeTruthy();
-            expect(sawEntity1).toBeTruthy();
-            expect(sawEntity2).toBeFalsy();
-            expect(sawEntity3).toBeFalsy();
-            expect(sawEntity4).toBeTruthy();
-            expect(sawEntity5).toBeTruthy();
-            expect(sawNewPropIn0).toBeTruthy();
-            expect(sawNewPropIn1).toBeTruthy();
-
-            // Close the member stream
-            await memberStream.close();
         };
 
-        const memberStream = new ReaderInstance("memberStream", client, logger);
-        const sparqlWriter = new WriterInstance("sparqlWriter", client, writeable, logger);
+        const runner = createRunner();
+        const [mmeberStreamWriter, memberStream] = channel(runner, "members");
+        const [sparqlWriter, memberStreamReader] = channel(runner, "queries");
+
+        checkOutput(memberStreamReader);
+
         const config: IngestConfig = {
             memberIsGraph: false,
             changeSemantics: {
@@ -994,30 +978,31 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         // Start the processing function
         const processingPromise = sparqlIngest.transform.call(sparqlIngest);
 
-        // Create new members ex:Entity_4 and ex:Entity_5;
-        await memberStream.handleMsg(Message.create({
-            channel: "memberStream",
-            data: Buffer.from(dataGenerator({
+        console.log("Sending string 1")
+        await mmeberStreamWriter.string(
+            dataGenerator({
                 changeType: config.changeSemantics!.createValue,
                 memberIndex: "4",
                 includeAllProps: true,
                 withMetadata: true,
                 isPartOfTransaction: true,
                 isLastOfTransaction: false,
-            }), 'utf-8')
-        }));
+            })
+        )
+        console.log("String sent 1")
 
-        await memberStream.handleMsg(Message.create({
-            channel: "memberStream",
-            data: Buffer.from(dataGenerator({
+        console.log("Sending string 2")
+        await mmeberStreamWriter.string(
+            dataGenerator({
                 changeType: config.changeSemantics!.createValue,
                 memberIndex: "5",
                 includeAllProps: true,
                 withMetadata: true,
                 isPartOfTransaction: true,
                 isLastOfTransaction: false,
-            }), 'utf-8')
-        }));
+            })
+        )
+        console.log("String sent 2")
 
         // Update members ex:Entity_0 and ex:Entity_1
         const updateStore0 = RdfStore.createDefault();
@@ -1038,10 +1023,10 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
             )
         );
 
-        await memberStream.handleMsg(Message.create({
-            channel: "memberStream",
-            data: Buffer.from(new N3Writer().quadsToString(updateStore0.getQuads()), 'utf-8')
-        }));
+        await mmeberStreamWriter.string(
+            new N3Writer().quadsToString(updateStore0.getQuads())
+        )
+
 
         const updateStore1 = RdfStore.createDefault();
         new Parser().parse(dataGenerator({
@@ -1060,35 +1045,34 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
                 df.literal("Updated value")
             )
         );
-        await memberStream.handleMsg(Message.create({
-            channel: "memberStream",
-            data: Buffer.from(new N3Writer().quadsToString(updateStore1.getQuads()), 'utf-8')
-        }));
 
-        // Delete members ex:Entity_2 and ex:Entity_3 by giving only its member type and shape
-        await memberStream.handleMsg(Message.create({
-            channel: "memberStream",
-            data: Buffer.from(dataGenerator({
+        await mmeberStreamWriter.string(
+            new N3Writer().quadsToString(updateStore1.getQuads()
+            ));
+
+        await mmeberStreamWriter.string(
+            dataGenerator({
                 changeType: config.changeSemantics!.deleteValue,
                 memberIndex: "2",
                 includeAllProps: false,
                 withMetadata: true,
                 isPartOfTransaction: true,
                 isLastOfTransaction: false
-            }), 'utf-8')
-        }));
+            })
+        );
 
-        await memberStream.handleMsg(Message.create({
-            channel: "memberStream",
-            data: Buffer.from(dataGenerator({
+        await mmeberStreamWriter.string(
+            dataGenerator({
                 changeType: config.changeSemantics!.deleteValue,
                 memberIndex: "3",
                 includeAllProps: false,
                 withMetadata: true,
                 isPartOfTransaction: true,
                 isLastOfTransaction: true
-            }), 'utf-8')
-        }));
+            })
+        );
+
+        await mmeberStreamWriter.close();
 
         await processingPromise;
     });
