@@ -346,7 +346,7 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
       if (updateStore.size > 0) {
          transactionQueryBuilder.push(UPDATE(updateStore, config.forVirtuoso, config.targetNamedGraph).join("\n"));
       }
-      if (updateStore.size > 0) {
+      if (deleteStore.size > 0) {
          transactionQueryBuilder.push(DELETE(
             deleteStore,
             deleteMembers,
