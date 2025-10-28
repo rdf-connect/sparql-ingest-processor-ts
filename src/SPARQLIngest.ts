@@ -261,7 +261,7 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
 
       if (this.sparqlWriter) {
          this.logger.info("Closing SPARQL writer");
-         //await this.sparqlWriter.close();
+         await this.sparqlWriter.close();
       }
       if (this.config.measurePerformance) {
          await writeFile(
