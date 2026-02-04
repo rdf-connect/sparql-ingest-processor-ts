@@ -35,7 +35,7 @@
         "winston": "^3.19.0"
     },
     "devDependencies": {
-        "@comunica/query-sparql": "^4.5.0",
+        "@comunica/query-sparql": "^5.1.3",
         "@rdfc/js-runner": "^3.0.2",
         "@rdfjs/types": "^2.0.1",
         "@types/n3": "^1.26.1",
