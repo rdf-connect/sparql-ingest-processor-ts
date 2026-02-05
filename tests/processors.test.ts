@@ -52,7 +52,6 @@ describe("Tests for SPARQL ingest processor", async () => {
         // Get processor configuration
         procHelper.getConfig("SPARQLIngest");
 
-        console.log(procHelper.config);
         // Instantiate processor from declared instance
         const proc: FullProc<SPARQLIngest> = await procHelper.getProcessor("http://example.com/ns#processor");
 

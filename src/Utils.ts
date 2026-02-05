@@ -2,10 +2,11 @@ import { XSD } from "@treecg/types";
 import { DataFactory } from "rdf-data-factory";
 import { RdfStore } from "rdf-stores";
 import { Agent } from "undici";
+import { Writer as N3Writer } from "n3";
 
-import type { Term, Quad_Subject, Quad_Object } from "@rdfjs/types";
+import type { Term, Quad_Subject, Quad_Object, Quad } from "@rdfjs/types";
 import type { IngestConfig } from "./SPARQLIngest";
-import {Logger} from "winston";
+import { Logger } from "winston";
 
 const df = new DataFactory();
 
@@ -109,22 +110,54 @@ export function sanitizeQuads(store: RdfStore): void {
     }
 }
 
-export async function doSPARQLRequest(query: string[], config: IngestConfig, logger: Logger): Promise<void> {
+export async function doSPARQLRequest(
+    query: string[] | Quad[],
+    config: IngestConfig,
+    logger: Logger
+): Promise<void> {
     try {
+        const timeout = config.measurePerformance?.queryTimeout || 1800; // Default to 30 minutes if not specified
+        // Check if the query is a Quad array (for Replication mode)
+        if (query.length > 0 && typeof query[0] !== 'string') {
+            const quads = query as Quad[];
+            const writer = new N3Writer();
+            const serialized = writer.quadsToString(quads);
+            const url = new URL(config.graphStoreUrl!);
+            if (config.accessToken) {
+                url.searchParams.append("access-token", config.accessToken);
+            }
+
+            logger.debug(`Executing SPARQL Graph Store request (POST) with ${quads.length} quads.`);
+            const res = await fetch(url.toString(), {
+                method: "POST",
+                headers: {
+                    'Content-Type': 'application/n-quads',
+                },
+                body: serialized,
+                dispatcher: new Agent({
+                    headersTimeout: timeout * 1000,
+                    bodyTimeout: timeout * 1000,
+                }),
+            });
+
+            if (!res.ok) {
+                throw new Error(`HTTP request failed with code ${res.status} and message: \n${await res.text()}`);
+            }
+            return;
+        }
+
         let queries: string[] = [];
-        const jointQuery = query.join("\n");
+        const jointQuery = (query as string[]).join("\n");
 
         if (config.forVirtuoso && Buffer.byteLength(jointQuery, 'utf8') > 1e6) {
             // We need to split the query across multiple requests for Virtuoso,
             // when the query is too big (see https://community.openlinksw.com/t/virtuosoexception-sq199/1950).
-            // We set 1MB as the maximum query size empirally, aiming to maximize the query size without hitting the limit.
-            queries = query;
+            // We set 1MB as the maximum query size empirically, aiming to maximize the query size without hitting the limit.
+            queries = query as string[];
         }
         else {
             queries.push(jointQuery);
         }
-
-        const timeout = config.measurePerformance?.queryTimeout || 1800; // Default to 30 minutes if not specified
 
         for (const q of queries) {
             logger.debug(`Executing SPARQL query: \n${q}`);

@@ -1,14 +1,15 @@
-import { extendLogger, Processor, Reader, Writer } from "@rdfc/js-runner";
+import { Processor, extendLogger } from "@rdfc/js-runner";
 import { SDS } from "@treecg/types";
 import { DataFactory } from "rdf-data-factory";
 import { RdfStore } from "rdf-stores";
-import { Parser } from "n3";
+import { Parser, Writer as N3Writer } from "n3";
 import { writeFile } from "fs/promises";
 import { CREATE, DELETE, UPDATE } from "./SPARQLQueries";
 import { doSPARQLRequest, getObjects, sanitizeQuads } from "./Utils";
-
-import type { Quad_Subject, Term } from "@rdfjs/types";
 import { Logger } from "winston";
+
+import type { Quad, Quad_Subject, Term } from "@rdfjs/types";
+import type { Reader, Writer } from "@rdfc/js-runner";
 
 const df = new DataFactory();
 
@@ -33,7 +34,14 @@ export type PerformanceConfig = {
    failureIsFatal?: boolean;
 };
 
+export enum OperationMode {
+   REPLICATION = "Replication",
+   SYNC = "Sync"
+}
+
 export type IngestConfig = {
+   operationMode?: OperationMode;
+   memberBatchSize?: number;
    memberIsGraph?: boolean;
    memberShapes?: string[]; // TODO: This should be obtained from an SDS metadata stream
    changeSemantics?: ChangeSemantics;
@@ -45,7 +53,7 @@ export type IngestConfig = {
    measurePerformance?: PerformanceConfig;
 };
 
-export type TransactionMember = {
+type TransactionMember = {
    memberId: string,
    transactionId: string,
    store: RdfStore
@@ -59,7 +67,9 @@ type SPARQLIngestArgs = {
 
 export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
    protected transactionMembers: TransactionMember[] = [];
+   protected memberBatch: Quad[] = [];
    protected requestsPerformance: number[] = [];
+   protected batchCount = 0;
 
    protected createTransactionQueriesLogger: Logger;
    protected doSPARQLRequestLogger: Logger;
@@ -67,9 +77,22 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
    async init(this: SPARQLIngestArgs & this): Promise<void> {
       this.createTransactionQueriesLogger = extendLogger(this.logger, "createTransactionQueries");
       this.doSPARQLRequestLogger = extendLogger(this.logger, "doSPARQLRequest");
+
+      if (!this.config.operationMode) {
+         this.config.operationMode = OperationMode.SYNC;
+      }
+
+      if (!this.config.memberBatchSize) {
+         this.config.memberBatchSize = 100;
+      }
+
+      if (this.config.accessToken === "") {
+         this.config.accessToken = undefined;
+      }
    }
 
    async transform(this: SPARQLIngestArgs & this): Promise<void> {
+
       for await (const rawQuads of this.memberStream.strings()) {
          this.logger.debug(`Raw member data received: \n${rawQuads}`);
          const quads = new Parser().parse(rawQuads);
@@ -177,7 +200,11 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
                   this.transactionMembers = [];
                } else {
                   // Determine if we have a named graph (either explicitly configured or as the member itself)
-                  const ng = this.getNamedGraphIfAny(memberIRI, this.config.memberIsGraph, this.config.targetNamedGraph);
+                  const ng = this.getNamedGraphIfAny(
+                     memberIRI,
+                     this.config.memberIsGraph,
+                     this.config.targetNamedGraph
+                  );
                   // Get the type of change
                   // TODO: use rdf-lens to support complex paths
                   const ctv = store.getQuads(
@@ -212,19 +239,37 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
                   this.logger.info(`Preparing 'DELETE {} WHERE {} + INSERT DATA {}' SPARQL query for transaction member ${memberIRI.value}`);
                   query = UPDATE(store, this.config.forVirtuoso, this.config.targetNamedGraph);
                } else {
-                  // Determine if we have a named graph (either explicitly configure or as the member itself)
-                  const ng = this.getNamedGraphIfAny(memberIRI, this.config.memberIsGraph, this.config.targetNamedGraph);
-                  // No change semantics are provided so we do a DELETE/INSERT query by default
-                  this.logger.info(`Preparing 'DELETE {} WHERE {} + INSERT DATA {}' SPARQL query for member ${memberIRI.value}`);
-                  query = UPDATE(store, this.config.forVirtuoso, ng);
+                  // Check operation mode
+                  if (this.config.operationMode === OperationMode.REPLICATION) {
+                     this.memberBatch.push(...store.getQuads(null, null, null, null));
+                     this.batchCount++;
+                     if (this.batchCount < this.config.memberBatchSize!) {
+                        continue;
+                     }
+                  } else {
+                     // Determine if we have a named graph (either explicitly configure or as the member itself)
+                     const ng = this.getNamedGraphIfAny(memberIRI, this.config.memberIsGraph, this.config.targetNamedGraph);
+                     // No change semantics are provided so we do a DELETE/INSERT query by default
+                     this.logger.info(`Preparing 'DELETE {} WHERE {} + INSERT DATA {}' SPARQL query for member ${memberIRI.value}`);
+                     query = UPDATE(store, this.config.forVirtuoso, ng);
+                  }
                }
             }
          } else {
             // Non-SDS data
 
-            // TODO: Handle change semantics(?) and transactions for non-SDS data
-            this.logger.info(`Preparing 'DELETE {} WHERE {} + INSERT DATA {}' SPARQL query for received triples (${store.size})`);
-            query = UPDATE(store, this.config.forVirtuoso, this.config.targetNamedGraph);
+            // Check operation mode
+            if (this.config.operationMode === OperationMode.REPLICATION) {
+               this.memberBatch.push(...store.getQuads(null, null, null, null));
+               this.batchCount++;
+               if (this.batchCount < this.config.memberBatchSize!) {
+                  continue;
+               }
+            } else {
+               // TODO: Handle change semantics(?) and transactions for non-SDS data
+               this.logger.info(`Preparing 'DELETE {} WHERE {} + INSERT DATA {}' SPARQL query for received triples (${store.size})`);
+               query = UPDATE(store, this.config.forVirtuoso, this.config.targetNamedGraph);
+            }
          }
 
          // Execute the update query
@@ -255,7 +300,56 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
                await this.sparqlWriter.string(query.join("\n"));
             }
          } else {
-            this.logger.warn(`No query generated for member ${memberIRI.value}`);
+            if (this.config.operationMode === OperationMode.REPLICATION) {
+               try {
+                  // Execute the ingestion of the collected member batch via the SPARQL Graph Store protocol
+                  const t0 = Date.now();
+                  await doSPARQLRequest(this.memberBatch, this.config, this.doSPARQLRequestLogger);
+                  const reqTime = Date.now() - t0;
+                  if (this.config.measurePerformance) {
+                     this.requestsPerformance.push(reqTime);
+                  }
+                  this.logger.info(`Executed query on remote SPARQL server ${this.config.graphStoreUrl} (took ${reqTime} ms)`);
+                  this.batchCount = 0;
+                  this.memberBatch = [];
+               } catch (error) {
+                  if (!this.config.measurePerformance || this.config.measurePerformance.failureIsFatal) {
+                     this.logger.error(`Error executing query on remote SPARQL server ${this.config.graphStoreUrl}: ${error}`);
+                     throw error;
+                  } else {
+                     if (this.config.measurePerformance) {
+                        this.requestsPerformance.push(-1); // -1 indicates a failure
+                     }
+                  }
+               }
+            } else {
+               this.logger.warn(`No query generated for member ${memberIRI.value}`);
+            }
+         }
+      }
+
+      // Flush remaining member batch if any
+      if (this.config.operationMode === OperationMode.REPLICATION && this.memberBatch.length > 0) {
+         try {
+            // Execute the ingestion of the collected member batch via the SPARQL Graph Store protocol
+            const t0 = Date.now();
+            await doSPARQLRequest(this.memberBatch, this.config, this.doSPARQLRequestLogger);
+            const reqTime = Date.now() - t0;
+            if (this.config.measurePerformance) {
+               this.requestsPerformance.push(reqTime);
+            }
+            this.logger.info(`Executed query on remote SPARQL server ${this.config.graphStoreUrl} (took ${reqTime} ms)`);
+            this.batchCount = 0;
+            this.memberBatch = [];
+         } catch (error) {
+            if (!this.config.measurePerformance || this.config.measurePerformance.failureIsFatal) {
+               this.logger.error(`Error executing query on remote SPARQL server ${this.config.graphStoreUrl}: ${error}`);
+               throw error;
+            } else {
+               if (this.config.measurePerformance) {
+                  this.requestsPerformance.push(-1); // -1 indicates a failure
+               }
+            }
          }
       }
 

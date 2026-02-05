@@ -34,6 +34,16 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
 [ ] a sh:NodeShape;
   sh:targetClass rdfc:IngestConfig;
   sh:property [
+    sh:path rdfc:operationMode;
+    sh:datatype xsd:string;
+    sh:name "operationMode";
+    sh:maxCount 1;
+  ], [
+    sh:path rdfc:memberBatchSize;
+    sh:datatype xsd:integer;
+    sh:name "memberBatchSize";
+    sh:maxCount 1;
+  ], [
     sh:path rdfc:memberIsGraph;
     sh:datatype xsd:boolean;
     sh:name "memberIsGraph";
