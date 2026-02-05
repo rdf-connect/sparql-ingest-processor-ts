@@ -7,7 +7,7 @@ import { DataFactory } from "rdf-data-factory";
 import { RdfStore } from "rdf-stores";
 import { Writer as N3Writer, Parser } from "n3";
 import { QueryEngine } from "@comunica/query-sparql";
-import { SPARQLIngest } from "../src/SPARQLIngest";
+import { SPARQLIngest, OperationMode } from "../src/SPARQLIngest";
 import { SDS } from "@treecg/types";
 
 import type { FullProc, Reader } from "@rdfc/js-runner";
@@ -44,10 +44,17 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
     beforeAll(async () => {
         // Setup mock http server
         try {
-            server = fastify();
+            server = fastify({ bodyLimit: 5 * 1024 * 1024 });
             // Add support for application/x-www-form-urlencoded
             server.addContentTypeParser(
                 "application/x-www-form-urlencoded",
+                { parseAs: 'string' },
+                (req, body, done) => {
+                    done(null, body);
+                }
+            );
+            server.addContentTypeParser(
+                "application/n-quads",
                 { parseAs: 'string' },
                 (req, body, done) => {
                     done(null, body);
@@ -117,12 +124,12 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
                 expect(sawNestedType).toBeTruthy();
 
                 // Close the member stream
-                await mmeberStreamWriter.close();
+                await memberStreamWriter.close();
             }
         };
 
         const runner = createRunner();
-        const [mmeberStreamWriter, memberStream] = channel(runner, "members");
+        const [memberStreamWriter, memberStream] = channel(runner, "members");
         const [sparqlWriter, memberStreamReader] = channel(runner, "queries");
 
         checkOutput(memberStreamReader);
@@ -151,7 +158,7 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         await sparqlIngest.init();
         // Start the processing function
         const processingPromise = sparqlIngest.transform();
-        mmeberStreamWriter.string(
+        await memberStreamWriter.string(
             dataGenerator({
                 changeType: config.changeSemantics!.createValue,
                 includeAllProps: true,
@@ -228,15 +235,15 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         const myEngine = new QueryEngine();
 
         // Execute processor function
-        const sparqlIngest = new SPARQLIngest({
+        const sparqlIngest = <FullProc<SPARQLIngest>>new SPARQLIngest({
             memberStream,
             config,
             sparqlWriter
         }, logger);
         // Initialize and start the processor
-        await sparqlIngest.init.call(sparqlIngest);
+        await sparqlIngest.init();
         // Start the processing function
-        const processingPromise = sparqlIngest.transform.call(sparqlIngest);
+        const processingPromise = sparqlIngest.transform();
 
         // Prepare updated member
         const store = RdfStore.createDefault();
@@ -322,16 +329,16 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         const myEngine = new QueryEngine();
 
         // Execute processor function
-        const sparqlIngest = new SPARQLIngest({
+        const sparqlIngest = <FullProc<SPARQLIngest>>new SPARQLIngest({
             memberStream,
             config,
             sparqlWriter
         }, logger);
 
         // Initialize and start the processor
-        await sparqlIngest.init.call(sparqlIngest);
+        await sparqlIngest.init();
         // Start the processing function
-        const processingPromise = sparqlIngest.transform.call(sparqlIngest);
+        const processingPromise = sparqlIngest.transform();
 
         // Prepare updated member
         const store = RdfStore.createDefault();
@@ -390,16 +397,16 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         const myEngine = new QueryEngine();
 
         // Execute processor function
-        const sparqlIngest = new SPARQLIngest({
+        const sparqlIngest = <FullProc<SPARQLIngest>>new SPARQLIngest({
             memberStream,
             config,
             sparqlWriter
         }, logger);
 
         // Initialize and start the processor
-        await sparqlIngest.init.call(sparqlIngest);
+        await sparqlIngest.init();
         // Start the processing function
-        const processingPromise = sparqlIngest.transform.call(sparqlIngest);
+        const processingPromise = sparqlIngest.transform();
         mmeberStreamWriter.string(
             await readFile("./tests/data/large-member.nq", "utf-8")
         );
@@ -451,16 +458,16 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         const myEngine = new QueryEngine();
 
         // Execute processor function
-        const sparqlIngest = new SPARQLIngest({
+        const sparqlIngest = <FullProc<SPARQLIngest>>new SPARQLIngest({
             memberStream,
             config,
             sparqlWriter
         }, logger);
 
         // Initialize and start the processor
-        await sparqlIngest.init.call(sparqlIngest);
+        await sparqlIngest.init();
         // Start the processing function
-        const processingPromise = sparqlIngest.transform.call(sparqlIngest);
+        const processingPromise = sparqlIngest.transform();
 
         mmeberStreamWriter.string(await readFile("./tests/data/very-large-member.nq", "utf-8"));
         await processingPromise;
@@ -524,16 +531,16 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         const myEngine = new QueryEngine();
 
         // Execute processor function
-        const sparqlIngest = new SPARQLIngest({
+        const sparqlIngest = <FullProc<SPARQLIngest>>new SPARQLIngest({
             memberStream,
             config,
             sparqlWriter
         }, logger);
 
         // Initialize and start the processor
-        await sparqlIngest.init.call(sparqlIngest);
+        await sparqlIngest.init();
         // Start the processing function
-        const processingPromise = sparqlIngest.transform.call(sparqlIngest);
+        const processingPromise = sparqlIngest.transform();
 
         mmeberStreamWriter.string(
             dataGenerator({
@@ -606,16 +613,16 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         const myEngine = new QueryEngine();
 
         // Execute processor function
-        const sparqlIngest = new SPARQLIngest({
+        const sparqlIngest = <FullProc<SPARQLIngest>>new SPARQLIngest({
             memberStream,
             config,
             sparqlWriter
         }, logger);
 
         // Initialize and start the processor
-        await sparqlIngest.init.call(sparqlIngest);
+        await sparqlIngest.init();
         // Start the processing function
-        const processingPromise = sparqlIngest.transform.call(sparqlIngest);
+        const processingPromise = sparqlIngest.transform();
 
         mmeberStreamWriter.string(
             dataGenerator({
@@ -692,16 +699,16 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         const myEngine = new QueryEngine();
 
         // Execute processor function
-        const sparqlIngest = new SPARQLIngest({
+        const sparqlIngest = <FullProc<SPARQLIngest>>new SPARQLIngest({
             memberStream,
             config,
             sparqlWriter
         }, logger);
 
         // Initialize and start the processor
-        await sparqlIngest.init.call(sparqlIngest);
+        await sparqlIngest.init();
         // Start the processing function
-        const processingPromise = sparqlIngest.transform.call(sparqlIngest);
+        const processingPromise = sparqlIngest.transform();
 
         // Prepare property-less (only type and change type) member
         const store = RdfStore.createDefault();
@@ -775,16 +782,16 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         const myEngine = new QueryEngine();
 
         // Execute processor function
-        const sparqlIngest = new SPARQLIngest({
+        const sparqlIngest = <FullProc<SPARQLIngest>>new SPARQLIngest({
             memberStream,
             config,
             sparqlWriter
         }, logger);
 
         // Initialize and start the processor
-        await sparqlIngest.init.call(sparqlIngest);
+        await sparqlIngest.init();
         // Start the processing function
-        const processingPromise = sparqlIngest.transform.call(sparqlIngest);
+        const processingPromise = sparqlIngest.transform();
 
         mmeberStreamWriter.string((await readFile("./tests/data/non-sds-data.nq", "utf-8")));
 
@@ -836,16 +843,16 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         const myEngine = new QueryEngine();
 
         // Execute processor function
-        const sparqlIngest = new SPARQLIngest({
+        const sparqlIngest = <FullProc<SPARQLIngest>>new SPARQLIngest({
             memberStream,
             config,
             sparqlWriter
         }, logger);
 
         // Initialize and start the processor
-        await sparqlIngest.init.call(sparqlIngest);
+        await sparqlIngest.init();
         // Start the processing function
-        const processingPromise = sparqlIngest.transform.call(sparqlIngest);
+        const processingPromise = sparqlIngest.transform();
 
         mmeberStreamWriter.string((await readFile("./tests/data/non-sds-data.nq", "utf-8")));
 
@@ -855,11 +862,55 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         expect(reqCount).toBe(1);
     });
 
+    test("Replication mode: Non-SDS data into an empty SPARQL endpoint", async () => {
+        const checkOutput = async (reader: Reader) => {
+            for await (const query of reader.strings()) {
+                expect(query).toBeDefined();
+                // Close the member stream
+                await memberStreamWriter.close();
+            }
+        };
+
+        const runner = createRunner();
+        const [memberStreamWriter, memberStream] = channel(runner, "members");
+        const [sparqlWriter, memberStreamReader] = channel(runner, "queries");
+
+        checkOutput(memberStreamReader);
+
+        const config: IngestConfig = {
+            operationMode: OperationMode.REPLICATION,
+            graphStoreUrl: "http://localhost:3000/sparql",
+            memberBatchSize: 5
+        };
+
+        // Execute processor function
+        const sparqlIngest = <FullProc<SPARQLIngest>>new SPARQLIngest({
+            memberStream,
+            config,
+            sparqlWriter
+        }, logger);
+
+        await sparqlIngest.init();
+        const processingPromise = sparqlIngest.transform();
+
+        // Send more than batch size to trigger batch and have leftovers for flush
+        const smallChunk = await readFile("./tests/data/non-sds-data.nq", "utf-8");
+        for (let i = 0; i < 6; i++) {
+            await memberStreamWriter.string(smallChunk);
+        }
+
+        expect(reqCount).toBe(1);
+        await memberStreamWriter.close();
+        await processingPromise;
+
+        // Check that the number of requests made to the mock server is correct
+        expect(reqCount).toBe(2);
+    });
+
     test("Transaction-aware SDS Member ingestion into a SPARQL endpoint (with shape description for deletes)", async () => {
         // Function to get the generated data from the processor
         const checkOutput = async (reader: Reader) => {
             for await (const query of reader.strings()) {
-                console.log("GOT QUERY");
                 // Execute produced SPARQL query
                 await myEngine.queryVoid(query, {
                     sources: [localStore],
@@ -967,18 +1018,17 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         const myEngine = new QueryEngine();
 
         // Execute processor function
-        const sparqlIngest = new SPARQLIngest({
+        const sparqlIngest = <FullProc<SPARQLIngest>>new SPARQLIngest({
             memberStream,
             config,
             sparqlWriter
         }, logger);
 
         // Initialize and start the processor
-        await sparqlIngest.init.call(sparqlIngest);
+        await sparqlIngest.init();
         // Start the processing function
-        const processingPromise = sparqlIngest.transform.call(sparqlIngest);
+        const processingPromise = sparqlIngest.transform();
 
-        console.log("Sending string 1")
         await mmeberStreamWriter.string(
             dataGenerator({
                 changeType: config.changeSemantics!.createValue,
@@ -989,9 +1039,7 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
                 isLastOfTransaction: false,
             })
         )
-        console.log("String sent 1")
 
-        console.log("Sending string 2")
         await mmeberStreamWriter.string(
             dataGenerator({
                 changeType: config.changeSemantics!.createValue,
@@ -1002,7 +1050,6 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
                 isLastOfTransaction: false,
             })
         )
-        console.log("String sent 2")
 
         // Update members ex:Entity_0 and ex:Entity_1
         const updateStore0 = RdfStore.createDefault();
