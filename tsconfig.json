@@ -16,7 +16,7 @@
     "strictPropertyInitialization": false,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
-    "incremental": true,
+    "incremental": false,
     "esModuleInterop": true,
     "removeComments": true
   },

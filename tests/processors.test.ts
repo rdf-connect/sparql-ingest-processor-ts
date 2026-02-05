@@ -1,23 +1,20 @@
 import { describe, expect, test } from "vitest";
-import { Parser } from "n3";
-//import { parse_processors } from "@rdfc/orchestrator-js";
+import { OperationMode, SPARQLIngest } from "../src/SPARQLIngest";
+import { ProcHelper } from "@rdfc/js-runner/lib/testUtils";
+
+import type { FullProc } from "@rdfc/js-runner";
 
 describe("Tests for SPARQL ingest processor", async () => {
-    const pipeline = `
-        @prefix rdfc: <https://w3id.org/rdf-connect#>.
-        @prefix owl: <http://www.w3.org/2002/07/owl#>.
-
-        <> owl:imports <./node_modules/@rdfc/js-runner/index.ttl>, <./processors.ttl>.
-
-        <inputChannel> a rdfc:Reader, rdfc:Writer.
-        <outputChannel> a rdfc:Reader, rdfc:Writer.
-    `;
-
     test("rdfc:SPARQLIngest is properly defined", async () => {
-        const proc = `
-            [ ] a rdfc:SPARQLIngest; 
+        const processor = `
+            @prefix rdfc: <https://w3id.org/rdf-connect#>.
+            @prefix xsd: <http://www.w3.org/2001/XMLSchema#>.
+
+            <http://example.com/ns#processor> a rdfc:SPARQLIngest; 
                 rdfc:memberStream <inputChannel>;
                 rdfc:ingestConfig [
+                    rdfc:operationMode "Replication";
+                    rdfc:memberBatchSize 100;
                     rdfc:memberIsGraph false;
                     rdfc:memberShape "Some SHACL shape", "Another SHACL shape";
                     rdfc:changeSemantics [
@@ -44,65 +41,44 @@ describe("Tests for SPARQL ingest processor", async () => {
                 rdfc:sparqlWriter <outputChannel>.
         `;
 
-        const source = pipeline + proc;
-        const n3Parser = new Parser();
-        const quads = n3Parser.parse(source);
+        const configLocation = process.cwd() + "/processors.ttl";
 
-        // TODO: FIX ME
+        const procHelper = new ProcHelper<FullProc<SPARQLIngest>>();
+        // Load processor semantic definition
+        await procHelper.importFile(configLocation);
+        // Load processor instance declaration
+        await procHelper.importInline("pipeline.ttl", processor);
 
-        //const processors = await parse_processors(quads);
-        //console.log(processors);
+        // Get processor configuration
+        procHelper.getConfig("SPARQLIngest");
 
-        // const { processors, quads, shapes: config } = await extractProcessors(source);
+        console.log(procHelper.config);
+        // Instantiate processor from declared instance
+        const proc: FullProc<SPARQLIngest> = await procHelper.getProcessor("http://example.com/ns#processor");
 
-        // const env = processors.find((x) => x.ty.value === "https://w3id.org/conn/js#SPARQLIngest")!;
-        // expect(env).toBeDefined();
+        expect(proc).toBeDefined();
 
-        // const argss = extractSteps(env, quads, config);
-        // expect(argss.length).toBe(1);
-        // expect(argss[0].length).toBe(3);
+        expect(proc.memberStream.uri).toContain("inputChannel");
+        expect(proc.sparqlWriter!.uri).toContain("outputChannel");
 
-        // const [[memberStream, ingestConfig, sparqlWriter, transactionConfig]] = argss;
-
-        // testReader(memberStream);
-        // expect(ingestConfig.memberIsGraph).toBeFalsy();
-        // expect(ingestConfig.memberShapes[0]).toBe("Some SHACL shape");
-        // expect(ingestConfig.memberShapes[1]).toBe("Another SHACL shape");
-        // expect(ingestConfig.changeSemantics.changeTypePath).toBe("http://ex.org/changeProp");
-        // expect(ingestConfig.changeSemantics.createValue).toBe("http://ex.org/Create");
-        // expect(ingestConfig.changeSemantics.updateValue).toBe("http://ex.org/Update");
-        // expect(ingestConfig.changeSemantics.deleteValue).toBe("http://ex.org/Delete");
-        // expect(ingestConfig.targetNamedGraph).toBe("http://ex.org/myGraph");
-        // expect(ingestConfig.transactionConfig.transactionIdPath).toBe("http://ex.org/transactionId");
-        // expect(ingestConfig.transactionConfig.transactionEndPath).toBe("http://ex.org/transactionEnd");
-        // expect(ingestConfig.graphStoreUrl).toBe("http://ex.org/myGraphStore");
-        // expect(ingestConfig.forVirtuoso).toBeTruthy();
-        // expect(ingestConfig.accessToken).toBe("someAccessToken");
-        // expect(ingestConfig.measurePerformance.name).toBe("PerformanceTest");
-        // expect(ingestConfig.measurePerformance.outputPath).toBe("/some/output/path");
-        // expect(ingestConfig.measurePerformance.failureIsFatal).toBeTruthy();
-        // expect(ingestConfig.measurePerformance.queryTimeout).toBe(30);
-        // testWriter(sparqlWriter);
-
-        // await checkProc(env.file, env.func);
+        expect(proc.config.operationMode).toBe(OperationMode.REPLICATION);
+        expect(proc.config.memberBatchSize).toBe(100);
+        expect(proc.config.memberIsGraph).toBeFalsy();
+        expect(proc.config.memberShapes![0]).toBe("Some SHACL shape");
+        expect(proc.config.memberShapes![1]).toBe("Another SHACL shape");
+        expect(proc.config.changeSemantics!.changeTypePath).toBe("http://ex.org/changeProp");
+        expect(proc.config.changeSemantics!.createValue).toBe("http://ex.org/Create");
+        expect(proc.config.changeSemantics!.updateValue).toBe("http://ex.org/Update");
+        expect(proc.config.changeSemantics!.deleteValue).toBe("http://ex.org/Delete");
+        expect(proc.config.targetNamedGraph).toBe("http://ex.org/myGraph");
+        expect(proc.config.transactionConfig!.transactionIdPath).toBe("http://ex.org/transactionId");
+        expect(proc.config.transactionConfig!.transactionEndPath).toBe("http://ex.org/transactionEnd");
+        expect(proc.config.graphStoreUrl).toBe("http://ex.org/myGraphStore");
+        expect(proc.config.forVirtuoso).toBeTruthy();
+        expect(proc.config.accessToken).toBe("someAccessToken");
+        expect(proc.config.measurePerformance!.name).toBe("PerformanceTest");
+        expect(proc.config.measurePerformance!.outputPath).toBe("/some/output/path");
+        expect(proc.config.measurePerformance!.failureIsFatal).toBeTruthy();
+        expect(proc.config.measurePerformance!.queryTimeout).toBe(30);
     });
 });
-
-function testReader(arg: any) {
-    expect(arg).toBeInstanceOf(Object);
-    expect(arg.ty).toBeDefined();
-    expect(arg.config.channel).toBeDefined();
-    expect(arg.config.channel.id).toBeDefined();
-}
-
-function testWriter(arg: any) {
-    expect(arg).toBeInstanceOf(Object);
-    expect(arg.ty).toBeDefined();
-    expect(arg.config.channel).toBeDefined();
-    expect(arg.config.channel.id).toBeDefined();
-}
-
-async function checkProc(location: string, func: string) {
-    const mod = await import("file://" + location);
-    expect(mod[func]).toBeDefined();
-}
