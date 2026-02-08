@@ -4,7 +4,7 @@ import { RdfStore } from "rdf-stores";
 import { Agent } from "undici";
 import { Writer as N3Writer } from "n3";
 
-import type { Term, Quad_Subject, Quad_Object, Quad } from "@rdfjs/types";
+import type { Term, Quad_Subject, Quad_Object, Quad, Quad_Graph } from "@rdfjs/types";
 import type { IngestConfig } from "./SPARQLIngest";
 import { Logger } from "winston";
 
@@ -32,6 +32,26 @@ export function getObjects(
     });
 }
 
+export function splitStorePerNamedGraph(store: RdfStore): {
+    graph: Quad_Graph,
+    store: RdfStore
+}[] {
+    const stores: {
+        graph: Quad_Graph,
+        store: RdfStore
+    }[] = [];
+    const namedGraphs = new Set<Quad_Graph>();
+    store.getQuads(null, null, null, null)
+        .forEach(q => namedGraphs.add(q.graph));
+    namedGraphs.forEach(ng => {
+        const subStore = RdfStore.createDefault();
+        const quads = store.getQuads(null, null, null, ng);
+        quads.forEach(q => subStore.addQuad(q));
+        stores.push({ graph: ng, store: subStore });
+    });
+    return stores;
+}
+
 /**
  * Splits a given RDF store into multiple stores, each containing a given maximum of quads.
  * This is useful for avoiding issues with large SPARQL updates that exceed the limits of some triple stores.
@@ -40,7 +60,7 @@ export function getObjects(
  * @param threshold - The maximum number of quads per store.
  * @returns An array of RDF stores, each containing up to the specified number of quads.
  */
-export function splitStore(store: RdfStore, threshold: number): RdfStore[] {
+export function splitStoreOnSize(store: RdfStore, threshold: number): RdfStore[] {
     const stores: RdfStore[] = [];
 
     if (store.size < threshold) {
@@ -147,7 +167,7 @@ export async function doSPARQLRequest(
         }
 
         let queries: string[] = [];
-        const jointQuery = (query as string[]).join("\n");
+        const jointQuery = (query as string[]).join(";\n");
 
         if (config.forVirtuoso && Buffer.byteLength(jointQuery, 'utf8') > 1e6) {
             // We need to split the query across multiple requests for Virtuoso,
@@ -160,7 +180,7 @@ export async function doSPARQLRequest(
         }
 
         for (const q of queries) {
-            logger.debug(`Executing SPARQL query: \n${q}`);
+            //logger.debug(`Executing SPARQL query: \n${q}`);
             const res = await fetch(config.graphStoreUrl!, {
                 method: "POST",
                 headers: {

@@ -3,34 +3,48 @@ import { RDF, SHACL } from "@treecg/types";
 import { Writer as N3Writer, Parser } from "n3"
 import { RdfStore } from "rdf-stores";
 import { DataFactory } from "rdf-data-factory";
-import { getObjects, getSubjects, splitStore } from "./Utils";
+import {
+    getObjects,
+    getSubjects,
+    splitStoreOnSize,
+    splitStorePerNamedGraph
+} from "./Utils";
 
 const df = new DataFactory();
 
 export const CREATE = (
-    store: RdfStore, 
-    forVirtuoso?: boolean, 
-    namedGraph?: string, 
-    multipleNamedGraphs?: boolean
+    store: RdfStore,
+    forVirtuoso?: boolean,
 ): string[] => {
-    // TODO: Handle case of multiple members being Named Graphs
-    
-    // Split the query into multiple queries to avoid query length limits 
-    // such as the 10000 SQL code lines in Virtuoso for large inserts. 
-    // (see https://github.com/openlink/virtuoso-opensource/blob/develop/7/libsrc/Wi/sparql2sql.h#L1031).
-    // 500 is an empirically obtained value to avoid exceeding the 10000 lines limit in Virtuoso
-    const stores = splitStore(store, forVirtuoso ? 500 : 50000);
-    
-    return stores.map((subStore, i) => {
-        return `
-            INSERT DATA {
-                ${namedGraph ? `GRAPH <${namedGraph}> {` : ""}
-                    ${new N3Writer().quadsToString(subStore.getQuads())}
-                ${namedGraph ? `}` : ""}
-            }
-            ${i === stores.length - 1 ? "" : ";"}
-        `;
-    });
+    const queries: string[] = [];
+
+    // First we split the store into multiple sub-stores per named graph
+    const storesPerGraph = splitStorePerNamedGraph(store);
+
+
+    for (const { graph, store } of storesPerGraph) {
+        // Split every named graph-based store into multiple sub-stores to avoid query length limits 
+        // such as the 10000 SQL code lines in Virtuoso for large inserts. 
+        // (see https://github.com/openlink/virtuoso-opensource/blob/develop/7/libsrc/Wi/sparql2sql.h#L1031).
+        // 500 is an empirically obtained value to avoid exceeding the 10000 lines limit in Virtuoso.
+        // 50000 is a large value for non-Virtuoso triple stores that usually benefit from larger queries.
+        const subStores = splitStoreOnSize(store, forVirtuoso ? 500 : 50000);
+
+
+        subStores.forEach((s, i) => {
+            queries.push(`
+                INSERT DATA {
+                    ${graph.equals(df.defaultGraph()) ? "" : `GRAPH <${graph.value}> {`}
+                        ${new N3Writer().quadsToString(s.getQuads().map(q => {
+                return df.quad(q.subject, q.predicate, q.object, df.defaultGraph());
+            }))}
+                    ${graph.equals(df.defaultGraph()) ? "" : `}`}
+                };
+            `);
+        });
+    }
+
+    return queries;
 };
 
 // We have to use a multiple query request of a DELETE WHERE + INSERT DATA for the default update operation
@@ -38,88 +52,93 @@ export const CREATE = (
 export const UPDATE = (
     store: RdfStore,
     forVirtuoso?: boolean,
-    namedGraph?: string, 
-    multipleNamedGraphs?: boolean
 ): string[] => {
-    // TODO: Handle case of multiple members being Named Graphs
-    const formattedQuery = formatQuery(store);
+    const queries: string[] = [];
 
-    // Split the query into multiple queries to avoid query length limits 
-    // such as the 10000 SQL code lines in Virtuoso for large inserts. 
-    // (see https://github.com/openlink/virtuoso-opensource/blob/develop/7/libsrc/Wi/sparql2sql.h#L1031).
-    // 500 is an empirically obtained value to avoid exceeding the 10000 lines limit in Virtuoso
-    const stores = splitStore(store, forVirtuoso ? 500 : 50000);
-    
-    const queries = [
-        `
-            ${namedGraph ? `WITH <${namedGraph}>` : ""}
+    // First we split the store into multiple sub-stores per named graph
+    const storesPerGraph = splitStorePerNamedGraph(store);
+
+    for (const { graph, store } of storesPerGraph) {
+        // Split every store into multiple sub-stores to avoid query length limits 
+        // such as the 10000 SQL code lines in Virtuoso for large inserts. 
+        // (see https://github.com/openlink/virtuoso-opensource/blob/develop/7/libsrc/Wi/sparql2sql.h#L1031).
+        // 500 is an empirically obtained value to avoid exceeding the 10000 lines limit in Virtuoso.
+        // 50000 is a large value for non-Virtuoso triple stores that usually benefit from larger queries.
+        const subStores = splitStoreOnSize(store, forVirtuoso ? 500 : 50000);
+
+        const formattedQuery = formatQuery(store);
+
+        const deleteInsertQuery = [`
+            ${graph.equals(df.defaultGraph()) ? "" : `WITH <${graph.value}>`}
             DELETE { 
                 ${formattedQuery[0]} 
             }
             WHERE { 
                 ${formattedQuery[0]} 
             };
-        `
-    ];
-    stores.forEach((subStore, i) => {
-        queries.push(`
-            INSERT DATA {
-                ${namedGraph ? `GRAPH <${namedGraph}> {` : ""}
-                    ${new N3Writer().quadsToString(subStore.getQuads())}
-                ${namedGraph ? `}` : ""}
-            }
-            ${i === stores.length - 1 ? "" : ";"}
-        `);
-    });
+        `];
+
+        subStores.forEach((s, i) => {
+            deleteInsertQuery.push(`
+                INSERT DATA {
+                    ${graph.equals(df.defaultGraph()) ? "" : `GRAPH <${graph.value}> {`}
+                        ${new N3Writer().quadsToString(s.getQuads().map(q => {
+                return df.quad(q.subject, q.predicate, q.object, df.defaultGraph());
+            }))}
+                    ${graph.equals(df.defaultGraph()) ? "" : `}`}
+                };
+            `);
+        });
+
+        queries.push(...deleteInsertQuery);
+    }
 
     return queries;
 };
 
 export const DELETE = (
     store: RdfStore,
-    memberIRIs: string[],
-    memberShapes?: string[],
-    namedGraph?: string,
-    multipleNamedGraphs?: boolean
-): string => {
-    // TODO: Handle case of multiple members being Named Graphs
-    const deleteBuilder = [];
-    const whereBuilder = [];
+    memberIRI: string,
+    memberShape?: string,
+): string[] => {
+    const queries: string[] = [];
 
-    let indexStart = 0;
-    for (const memberIRI of memberIRIs) {
-        const formatted = formatQuery(store, memberIRI, memberShapes, indexStart);
-        deleteBuilder.push(formatted.length > 1 ? formatted[1] : formatted[0]);
-        whereBuilder.push(formatted[0]);
-        indexStart++;
+    // First we split the store into multiple sub-stores per named graph
+    const storesPerGraph = splitStorePerNamedGraph(store);
+
+    for (const { graph, store } of storesPerGraph) {
+        const formatted = formatQuery(store, memberIRI, memberShape);
+        const deleteBuilder = formatted.length > 1 ? formatted[1] : formatted[0];
+        const whereBuilder = formatted[0];
+
+        queries.push(`
+            ${graph.equals(df.defaultGraph()) ? "" : `WITH <${graph.value}>`}
+            DELETE {
+                ${deleteBuilder}
+            } WHERE {
+                ${whereBuilder}
+            };
+        `);
     }
 
-    return `
-        ${namedGraph ? `WITH <${namedGraph}>` : ""}
-        DELETE {
-            ${deleteBuilder.join("\n")}
-        } WHERE {
-            ${whereBuilder.join("\n")}
-        }
-    `;
+    return queries;
 }
 
 function formatQuery(
     memberStore: RdfStore,
     memberIRI?: string,
-    memberShapes?: string[],
+    memberShape?: string,
     indexStart: number = 0
 ): string[] {
     const subjectSet = new Set<string>();
     const blankNodeMap = new Map<string, string>();
     const queryBuilder: string[] = [];
-    const formattedQueries: string[] = [];
     let i = indexStart;
 
-    // Check if one or more member shapes were given. 
+    // Check if member shape was given. 
     // If not, we assume that all properties of the member are present 
     // and we use them to define its DELETE query pattern.
-    if (!memberShapes || memberShapes.length === 0) {
+    if (!memberShape) {
         // Iterate over every BGP of the member to define a deletion pattern
         for (const quad of memberStore.getQuads()) {
             if (!subjectSet.has(quad.subject.value)) {
@@ -139,11 +158,11 @@ function formatQuery(
                     }
 
                     // Define a pattern that covers the referencing BGP and every property and value of blank nodes
-                    queryBuilder.push(`${blankNodeMap.get(quad.subject.value)} <${quad.predicate.value}> ${
-                        quad.object.termType === "Literal" ? `"${quad.object.value}"^^<${quad.object.datatype.value}>`
-                        : quad.object.termType === "BlankNode" ? `${blankNodeMap.get(quad.object.value)} ` 
-                        : `<${quad.object.value}>`
-                    }.`);
+                    queryBuilder.push(`${blankNodeMap.get(quad.subject.value)} <${quad.predicate.value}> ${quad.object.termType === "Literal"
+                        ? `"${quad.object.value}"^^<${quad.object.datatype.value}>`
+                        : quad.object.termType === "BlankNode" ? `${blankNodeMap.get(quad.object.value)} `
+                            : `<${quad.object.value}>`
+                        }.`);
                     // Generic pattern to cover all properties of the blank node
                     queryBuilder.push(`${blankNodeMap.get(quad.subject.value)} ?p_${i} ?o_${i}.`);
                     // Generic pattern to cover all triples that reference the blank node
@@ -152,66 +171,36 @@ function formatQuery(
                 i++;
             }
         }
-        formattedQueries.push(queryBuilder.join("\n"))
+        return [queryBuilder.join("\n")];
     } else {
-        // Create a shape index per target class
-        const shapeIndex = new Map<string, RdfStore>();
-        memberShapes.forEach(msh => {
-            const shapeStore = RdfStore.createDefault();
-            new Parser().parse(msh).forEach(quad => shapeStore.addQuad(quad));
-            shapeIndex.set(extractMainTargetClass(shapeStore).value, shapeStore);
-        });
+        const shapeStore = RdfStore.createDefault();
+        new Parser().parse(memberShape).forEach(quad => shapeStore.addQuad(quad));
 
         // Add basic DELETE query pattern for this member
         queryBuilder.push(`<${memberIRI}> ?p_${i} ?o_${i}.`);
 
-        // See if the member has a defined rdf:type so that we create a query pattern 
-        // for a specific shape, based on the sh:targetClass.
-        // Otherwise we have to include all shapes in the query pattern because we don't know
-        // exactly which is the shape of the received member.
-        const memberType = getObjects(memberStore, df.namedNode(memberIRI!), RDF.terms.type)[0];
-        if (memberType) {
+        // We have to define a different but related query pattern for the delete clause without OPTIONAL
+        const deleteQueryBuilder: string[] = [];
+        deleteQueryBuilder.push(`<${memberIRI}> ?p_${i} ?o_${i}.`);
+        i++;
+
+        const propShapes = getObjects(shapeStore, null, SHACL.terms.property, null);
+        queryBuilder.push(" OPTIONAL { ");
+        for (const propSh of propShapes) {
+            const pred = getObjects(shapeStore, propSh, SHACL.terms.path, null)[0];
+            queryBuilder.push(`<${memberIRI}> <${pred.value}> ?subEnt_${i}.`);
+            deleteQueryBuilder.push(`<${memberIRI}> <${pred.value}> ?subEnt_${i}.`);
+            queryBuilder.push(`?subEnt_${i} ?p_${i} ?o_${i}.`);
+            deleteQueryBuilder.push(`?subEnt_${i} ?p_${i} ?o_${i}.`);
             i++;
-            const mshStore = shapeIndex.get(memberType.value);
-            const propShapes = getObjects(mshStore!, null, SHACL.terms.property, null);
-
-            for (const propSh of propShapes) {
-                const pred = getObjects(mshStore!, propSh, SHACL.terms.path, null)[0];
-                queryBuilder.push(`<${memberIRI}> <${pred.value}> ?subEnt_${i}.`);
-                queryBuilder.push(`?subEnt_${i} ?p_${i} ?o_${i}.`);
-                i++;
-            }
-            formattedQueries.push(queryBuilder.join("\n"));
-        } else {
-            // We have to define a different but related query pattern for the delete clause without OPTIONAL
-            const deleteQueryBuilder: string[] = [];
-            deleteQueryBuilder.push(`<${memberIRI}> ?p_${i} ?o_${i}.`);
-            i++;
-
-            // Iterate over every declared member shape
-            shapeIndex.forEach(mshStore => {
-                const propShapes = getObjects(mshStore, null, SHACL.terms.property, null);
-                queryBuilder.push(" OPTIONAL { ");
-                for (const propSh of propShapes) {
-                    const pred = getObjects(mshStore, propSh, SHACL.terms.path, null)[0];
-                    queryBuilder.push(`<${memberIRI}> <${pred.value}> ?subEnt_${i}.`);
-                    deleteQueryBuilder.push(`<${memberIRI}> <${pred.value}> ?subEnt_${i}.`);
-                    queryBuilder.push(`?subEnt_${i} ?p_${i} ?o_${i}.`);
-                    deleteQueryBuilder.push(`?subEnt_${i} ?p_${i} ?o_${i}.`);
-                    i++;
-                }
-                queryBuilder.push(" }");
-            });
-
-            formattedQueries.push(queryBuilder.join("\n"));
-            formattedQueries.push(deleteQueryBuilder.join("\n"));
         }
-    }
+        queryBuilder.push(" }");
 
-    return formattedQueries;
+        return [queryBuilder.join("\n"), deleteQueryBuilder.join("\n")];
+    }
 }
 
-// Find the main target class of a give Shape Graph.
+// Find the main target class of a given Shape Graph.
 // We determine this by assuming that the main node shape
 // is not referenced by any other shape description.
 // If more than one is found an exception is thrown.

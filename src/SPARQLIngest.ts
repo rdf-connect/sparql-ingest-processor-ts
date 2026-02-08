@@ -2,7 +2,7 @@ import { Processor, extendLogger } from "@rdfc/js-runner";
 import { SDS } from "@treecg/types";
 import { DataFactory } from "rdf-data-factory";
 import { RdfStore } from "rdf-stores";
-import { Parser, Writer as N3Writer } from "n3";
+import { Parser } from "n3";
 import { writeFile } from "fs/promises";
 import { CREATE, DELETE, UPDATE } from "./SPARQLQueries";
 import { doSPARQLRequest, getObjects, sanitizeQuads } from "./Utils";
@@ -42,8 +42,7 @@ export enum OperationMode {
 export type IngestConfig = {
    operationMode?: OperationMode;
    memberBatchSize?: number;
-   memberIsGraph?: boolean;
-   memberShapes?: string[]; // TODO: This should be obtained from an SDS metadata stream
+   memberShape?: string; // TODO: This should be obtained from an SDS metadata stream
    changeSemantics?: ChangeSemantics;
    targetNamedGraph?: string;
    transactionConfig?: TransactionConfig;
@@ -94,11 +93,19 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
    async transform(this: SPARQLIngestArgs & this): Promise<void> {
 
       for await (const rawQuads of this.memberStream.strings()) {
-         this.logger.debug(`Raw member data received: \n${rawQuads}`);
+         //this.logger.debug(`Raw member data received: \n${rawQuads}`);
          const quads = new Parser().parse(rawQuads);
          this.logger.verbose(`Parsed ${quads.length} quads from received member data`);
          const store = RdfStore.createDefault();
-         quads.forEach(q => store.addQuad(q));
+
+         quads.forEach(q => {
+            if (q.graph.equals(df.defaultGraph()) && this.config.targetNamedGraph) {
+               // Add target graph (if any) as named graph
+               store.addQuad(df.quad(q.subject, q.predicate, q.object, df.namedNode(this.config.targetNamedGraph)));
+            } else {
+               store.addQuad(q)
+            }
+         });
 
          // Variable that will hold the full query to be executed
          let query: string[] | undefined;
@@ -114,7 +121,7 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
             const sdsQuads = store.getQuads(null, null, null, SDS.terms.custom("DataDescription"));
             sdsQuads.forEach(q => store.removeQuad(q));
 
-            // Find if this member is part of a transaction
+            // See if this member is part of a transaction
             if (this.config.transactionConfig) {
                // TODO: use rdf-lens to support complex paths
                const transactionId = getObjects(
@@ -199,33 +206,24 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
                   // Clean up transaction stores
                   this.transactionMembers = [];
                } else {
-                  // Determine if we have a named graph (either explicitly configured or as the member itself)
-                  const ng = this.getNamedGraphIfAny(
-                     memberIRI,
-                     this.config.memberIsGraph,
-                     this.config.targetNamedGraph
-                  );
                   // Get the type of change
                   // TODO: use rdf-lens to support complex paths
                   const ctv = store.getQuads(
                      null,
                      df.namedNode(this.config.changeSemantics!.changeTypePath)
                   )[0];
-                  // Remove change type quad from store
-                  // TODO: this should be made configurable as not always we want to remove this quad.
-                  store.removeQuad(ctv);
                   // Sanitize quads to prevent issues on SPARQL queries
                   sanitizeQuads(store);
                   // Assemble corresponding SPARQL UPDATE query
                   if (ctv.object.value === this.config.changeSemantics.createValue) {
                      this.logger.info(`Preparing 'INSERT DATA {}' SPARQL query for member ${memberIRI.value}`);
-                     query = CREATE(store, this.config.forVirtuoso, ng);
+                     query = CREATE(store, this.config.forVirtuoso);
                   } else if (ctv.object.value === this.config.changeSemantics.updateValue) {
                      this.logger.info(`Preparing 'DELETE {} INSERT {} WHERE {}' SPARQL query for member ${memberIRI.value}`);
-                     query = UPDATE(store, this.config.forVirtuoso, ng);
+                     query = UPDATE(store, this.config.forVirtuoso);
                   } else if (ctv.object.value === this.config.changeSemantics.deleteValue) {
                      this.logger.info(`Preparing 'DELETE WHERE {}' SPARQL query for member ${memberIRI.value}`);
-                     query = [DELETE(store, [memberIRI.value], this.config.memberShapes, ng)];
+                     query = DELETE(store, memberIRI.value, this.config.memberShape);
                   } else {
                      this.logger.error(`[sparqlIngest] Unrecognized change type value: ${ctv.object.value}`);
                      throw new Error(`[sparqlIngest] Unrecognized change type value: ${ctv.object.value}`);
@@ -234,47 +232,51 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
             } else {
                if (this.transactionMembers.length > 0) {
                   this.transactionMembers.forEach(ts => {
-                     ts.store.getQuads(null, null, null, null).forEach(q => store.addQuad(q));
+                     ts.store.getQuads().forEach(q => store.addQuad(q));
                   });
                   this.logger.info(`Preparing 'DELETE {} WHERE {} + INSERT DATA {}' SPARQL query for transaction member ${memberIRI.value}`);
-                  query = UPDATE(store, this.config.forVirtuoso, this.config.targetNamedGraph);
+                  query = UPDATE(store, this.config.forVirtuoso);
                } else {
                   // Check operation mode
                   if (this.config.operationMode === OperationMode.REPLICATION) {
-                     this.memberBatch.push(...store.getQuads(null, null, null, null));
+                     this.memberBatch.push(...store.getQuads().map(q => {
+                        if (q.graph.equals(df.defaultGraph()) && this.config.targetNamedGraph) {
+                           q.graph = df.namedNode(this.config.targetNamedGraph);
+                        }
+                        return q;
+                     }));
                      this.batchCount++;
                      if (this.batchCount < this.config.memberBatchSize!) {
                         continue;
                      }
                   } else {
-                     // Determine if we have a named graph (either explicitly configure or as the member itself)
-                     const ng = this.getNamedGraphIfAny(memberIRI, this.config.memberIsGraph, this.config.targetNamedGraph);
                      // No change semantics are provided so we do a DELETE/INSERT query by default
-                     this.logger.info(`Preparing 'DELETE {} WHERE {} + INSERT DATA {}' SPARQL query for member ${memberIRI.value}`);
-                     query = UPDATE(store, this.config.forVirtuoso, ng);
+                     this.logger.info(`Preparing 'DELETE {} WHERE {} + INSERT DATA {}' SPARQL queries for member ${memberIRI.value}`);
+                     query = UPDATE(store, this.config.forVirtuoso);
                   }
                }
             }
          } else {
-            // Non-SDS data
+            // We got non-SDS data
+            // TODO: Handle change semantics(?) and transactions(?) for non-SDS data
 
             // Check operation mode
             if (this.config.operationMode === OperationMode.REPLICATION) {
-               this.memberBatch.push(...store.getQuads(null, null, null, null));
+               // Build batch of quads that will be sent in one go using the SPARQL Graph Store protocol
+               this.memberBatch.push(...store.getQuads());
                this.batchCount++;
                if (this.batchCount < this.config.memberBatchSize!) {
                   continue;
                }
             } else {
-               // TODO: Handle change semantics(?) and transactions for non-SDS data
-               this.logger.info(`Preparing 'DELETE {} WHERE {} + INSERT DATA {}' SPARQL query for received triples (${store.size})`);
-               query = UPDATE(store, this.config.forVirtuoso, this.config.targetNamedGraph);
+               this.logger.info(`Preparing 'DELETE {} WHERE {} + INSERT DATA {}' SPARQL queries for received quads (${store.size})`);
+               query = UPDATE(store, this.config.forVirtuoso);
             }
          }
 
          // Execute the update query
          if (query && query.length > 0) {
-            this.logger.debug(`Complete SPARQL query generated for received member: \n${query.join("\n")}`);
+            //this.logger.debug(`Complete SPARQL query generated for received member: \n${query.join(";\n")}`);
             if (this.config.graphStoreUrl) {
                try {
                   const t0 = Date.now();
@@ -297,7 +299,13 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
             }
 
             if (this.sparqlWriter) {
-               await this.sparqlWriter.string(query.join("\n"));
+               if (this.config.forVirtuoso) {
+                  for (const q of query) {
+                     await this.sparqlWriter.string(q);
+                  }
+               } else {
+                  await this.sparqlWriter.string(query.join("\n"));
+               }
             }
          } else {
             if (this.config.operationMode === OperationMode.REPLICATION) {
@@ -385,20 +393,6 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
       }
    }
 
-   getNamedGraphIfAny(
-      memberIRI: Term,
-      memberIsGraph: boolean | undefined,
-      targetNamedGraph?: string
-   ): string | undefined {
-      let ng;
-      if (memberIsGraph) {
-         ng = memberIRI.value;
-      } else if (targetNamedGraph) {
-         ng = targetNamedGraph;
-      }
-      return ng;
-   }
-
    createTransactionQueries(
       transactionMembers: TransactionMember[],
       config: IngestConfig,
@@ -415,15 +409,13 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
 
       for (const tsm of transactionMembers) {
          const ctv = tsm.store.getQuads(null, df.namedNode(config.changeSemantics!.changeTypePath))[0];
-         // Remove change type quad from store
-         tsm.store.removeQuad(ctv);
 
          if (ctv.object.value === config.changeSemantics!.createValue) {
-            tsm.store.getQuads(null, null, null, null).forEach(q => createStore.addQuad(q));
+            tsm.store.getQuads().forEach(q => createStore.addQuad(q));
          } else if (ctv.object.value === config.changeSemantics!.updateValue) {
-            tsm.store.getQuads(null, null, null, null).forEach(q => updateStore.addQuad(q));
+            tsm.store.getQuads().forEach(q => updateStore.addQuad(q));
          } else if (ctv.object.value === config.changeSemantics!.deleteValue) {
-            tsm.store.getQuads(null, null, null, null).forEach(q => deleteStore.addQuad(q));
+            tsm.store.getQuads().forEach(q => deleteStore.addQuad(q));
             deleteMembers.push(tsm.memberId);
          } else {
             this.createTransactionQueriesLogger.error(`[sparqlIngest] Unrecognized change type value: ${ctv.object.value}`);
@@ -431,24 +423,22 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
          }
       }
 
-      // TODO: Handle case of members as Named Graphs
-
       // Build multi-operation SPARQL query
       if (createStore.size > 0) {
-         transactionQueryBuilder.push(CREATE(createStore, config.forVirtuoso, config.targetNamedGraph).join("\n"));
+         transactionQueryBuilder.push(CREATE(createStore, config.forVirtuoso).join("\n"));
       }
       if (updateStore.size > 0) {
-         transactionQueryBuilder.push(UPDATE(updateStore, config.forVirtuoso, config.targetNamedGraph).join("\n"));
+         transactionQueryBuilder.push(UPDATE(updateStore, config.forVirtuoso).join("\n"));
       }
       if (deleteStore.size > 0) {
-         transactionQueryBuilder.push(DELETE(
-            deleteStore,
-            deleteMembers,
-            config.memberShapes,
-            config.targetNamedGraph
-         ));
+         deleteMembers.forEach(dm => {
+            transactionQueryBuilder.push(DELETE(
+               deleteStore,
+               dm,
+               config.memberShape,
+            ).join("\n"));
+         });
       }
-
-      return transactionQueryBuilder.join(";\n");
+      return transactionQueryBuilder.join("\n");
    }
 }
