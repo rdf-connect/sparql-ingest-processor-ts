@@ -147,7 +147,8 @@ export async function doSPARQLRequest(
                 url.searchParams.append("access-token", config.accessToken);
             }
 
-            logger.debug(`Executing SPARQL Graph Store request (POST) with ${quads.length} quads.`);
+            logger.verbose(`[doSPARQLRequest] Executing SPARQL Graph Store request (POST) with ${quads.length} quads.`);
+            logger.debug(`[doSPARQLRequest] POSTing the following RDF quads:\n${serialized}`);
             const res = await fetch(url.toString(), {
                 method: "POST",
                 headers: {
@@ -180,7 +181,7 @@ export async function doSPARQLRequest(
         }
 
         for (const q of queries) {
-            //logger.debug(`Executing SPARQL query: \n${q}`);
+            logger.debug(`[doSPARQLRequest] Executing SPARQL query: \n${q}`);
             const res = await fetch(config.graphStoreUrl!, {
                 method: "POST",
                 headers: {
