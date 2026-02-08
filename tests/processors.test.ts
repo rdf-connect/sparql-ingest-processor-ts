@@ -15,8 +15,7 @@ describe("Tests for SPARQL ingest processor", async () => {
                 rdfc:ingestConfig [
                     rdfc:operationMode "Replication";
                     rdfc:memberBatchSize 100;
-                    rdfc:memberIsGraph false;
-                    rdfc:memberShape "Some SHACL shape", "Another SHACL shape";
+                    rdfc:memberShape "Some SHACL shape";
                     rdfc:changeSemantics [
                         rdfc:changeTypePath "http://ex.org/changeProp";
                         rdfc:createValue "http://ex.org/Create";
@@ -62,9 +61,7 @@ describe("Tests for SPARQL ingest processor", async () => {
 
         expect(proc.config.operationMode).toBe(OperationMode.REPLICATION);
         expect(proc.config.memberBatchSize).toBe(100);
-        expect(proc.config.memberIsGraph).toBeFalsy();
-        expect(proc.config.memberShapes![0]).toBe("Some SHACL shape");
-        expect(proc.config.memberShapes![1]).toBe("Another SHACL shape");
+        expect(proc.config.memberShape).toBe("Some SHACL shape");
         expect(proc.config.changeSemantics!.changeTypePath).toBe("http://ex.org/changeProp");
         expect(proc.config.changeSemantics!.createValue).toBe("http://ex.org/Create");
         expect(proc.config.changeSemantics!.updateValue).toBe("http://ex.org/Update");

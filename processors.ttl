@@ -44,15 +44,10 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:name "memberBatchSize";
     sh:maxCount 1;
   ], [
-    sh:path rdfc:memberIsGraph;
-    sh:datatype xsd:boolean;
-    sh:name "memberIsGraph";
-    sh:maxCount 1;
-  ], [
     sh:path rdfc:memberShape;
     sh:datatype xsd:string;
-    sh:name "memberShapes";
-    sh:minCount 0;
+    sh:name "memberShape";
+    sh:maxCount 1;
   ], [
     sh:path rdfc:changeSemantics;
     sh:class rdfc:ChangeSemantics;
