@@ -8,7 +8,14 @@ import { CREATE, DELETE, UPDATE } from "./SPARQLQueries";
 import { doSPARQLRequest, getObjects, sanitizeQuads } from "./Utils";
 import { Logger } from "winston";
 
-import type { Quad, Quad_Subject, Term } from "@rdfjs/types";
+import type {
+   Quad,
+   Quad_Graph,
+   Quad_Object,
+   Quad_Predicate,
+   Quad_Subject,
+   Term
+} from "@rdfjs/types";
 import type { Reader, Writer } from "@rdfc/js-runner";
 
 const df = new DataFactory();
@@ -93,19 +100,27 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
    async transform(this: SPARQLIngestArgs & this): Promise<void> {
 
       for await (const rawQuads of this.memberStream.strings()) {
-         //this.logger.debug(`Raw member data received: \n${rawQuads}`);
+         this.logger.debug(`Raw member data received: \n${rawQuads}`);
          const quads = new Parser().parse(rawQuads);
          this.logger.verbose(`Parsed ${quads.length} quads from received member data`);
          const store = RdfStore.createDefault();
 
+         // Assign default graph triples to the target named graph (if any)
          quads.forEach(q => {
             if (q.graph.equals(df.defaultGraph()) && this.config.targetNamedGraph) {
-               // Add target graph (if any) as named graph
-               store.addQuad(df.quad(q.subject, q.predicate, q.object, df.namedNode(this.config.targetNamedGraph)));
+               store.addQuad(df.quad(
+                  <Quad_Subject>q.subject,
+                  <Quad_Predicate>q.predicate,
+                  <Quad_Object>q.object,
+                  <Quad_Graph>df.namedNode(this.config.targetNamedGraph)
+               ));
             } else {
                store.addQuad(q)
             }
          });
+
+         // Sanitize quads to prevent issues on SPARQL queries
+         sanitizeQuads(store);
 
          // Variable that will hold the full query to be executed
          let query: string[] | undefined;
@@ -212,8 +227,6 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
                      null,
                      df.namedNode(this.config.changeSemantics!.changeTypePath)
                   )[0];
-                  // Sanitize quads to prevent issues on SPARQL queries
-                  sanitizeQuads(store);
                   // Assemble corresponding SPARQL UPDATE query
                   if (ctv.object.value === this.config.changeSemantics.createValue) {
                      this.logger.info(`Preparing 'INSERT DATA {}' SPARQL query for member ${memberIRI.value}`);
@@ -239,12 +252,7 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
                } else {
                   // Check operation mode
                   if (this.config.operationMode === OperationMode.REPLICATION) {
-                     this.memberBatch.push(...store.getQuads().map(q => {
-                        if (q.graph.equals(df.defaultGraph()) && this.config.targetNamedGraph) {
-                           q.graph = df.namedNode(this.config.targetNamedGraph);
-                        }
-                        return q;
-                     }));
+                     this.memberBatch.push(...store.getQuads());
                      this.batchCount++;
                      if (this.batchCount < this.config.memberBatchSize!) {
                         continue;
@@ -276,7 +284,6 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
 
          // Execute the update query
          if (query && query.length > 0) {
-            //this.logger.debug(`Complete SPARQL query generated for received member: \n${query.join(";\n")}`);
             if (this.config.graphStoreUrl) {
                try {
                   const t0 = Date.now();
