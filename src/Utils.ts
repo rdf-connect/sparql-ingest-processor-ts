@@ -140,7 +140,7 @@ export async function doSPARQLRequest(
         // Check if the query is a Quad array (for Replication mode)
         if (query.length > 0 && typeof query[0] !== 'string') {
             const quads = query as Quad[];
-            const writer = new N3Writer();
+            const writer = new N3Writer({ format: "N-Quads" });
             const serialized = writer.quadsToString(quads);
             const url = new URL(config.graphStoreUrl!);
             if (config.accessToken) {
