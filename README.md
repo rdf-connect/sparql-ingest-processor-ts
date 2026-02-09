@@ -46,6 +46,8 @@ npm install @rdfc/sparql-ingest-processor-ts
 <ingester> a rdfc:SPARQLIngest;
     rdfc:memberStream <in>;
     rdfc:ingestConfig [
+        rdfc:operationMode "Replication";
+        rdfc:memberBatchSize 500;
         rdfc:memberShape "http://ex.org/Shape";
         rdfc:changeSemantics [
             rdfc:changeTypePath "http://ex.org/changeType";
@@ -83,6 +85,8 @@ npm install @rdfc/sparql-ingest-processor-ts
 ---
 
 ### Parameters of `rdfc:IngestConfig`:
+- `rdfc:operationMode` (**string**, optional): Operation mode of the processor. Can be `Replication` or `Sync`. `Replication` mode uses the [SPARQL Graph Store Protocol](https://www.w3.org/TR/sparql11-http-rdf-update/) to ingest data directly into a triple store, which assumes that all received data is meant to be added. `Sync` mode uses the [SPARQL UPDATE specification](https://www.w3.org/TR/sparql11-update/) to ingest data via SPARQL queries, which allows for all CRUD operations.
+- `rdfc:memberBatchSize` (**integer**, optional): Number of input records to batch together for ingestion when running in `Replication` mode.
 - `rdfc:memberShape` (**string**, optional): SHACL shape used to guide query construction when payloads are incomplete.
 - `rdfc:changeSemantics` (**rdfc:ChangeSemantics**, optional): Configures mapping between change types (create/update/delete) and SPARQL operations.
 - `rdfc:targetNamedGraph` (**string**, optional): Force all operations into a specific named graph.
@@ -132,7 +136,6 @@ npm install @rdfc/sparql-ingest-processor-ts
 
 ## Notes
 
-- Delete operations can be handled differently depending on how complete the input record is.
+- Delete operations can be handled differently depending on how complete the input record is. A SHACL shape (`rdfc:memberShape`) can be provided to help identify deletion targets when payloads are incomplete.
 - Transactions can buffer multiple input records and commit them together using `rdfc:transactionConfig`.
-- A SHACL shape (`rdfc:memberShape`) can be provided to help identify deletion targets when payloads are incomplete.
 
