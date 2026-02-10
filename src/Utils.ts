@@ -140,7 +140,12 @@ export async function doSPARQLRequest(
         // Check if the query is a Quad array (for Replication mode)
         if (query.length > 0 && typeof query[0] !== 'string') {
             const quads = query as Quad[];
-            const writer = new N3Writer({ format: "N-Quads" });
+            // Flag that indicates we are dealing with quads and not triples
+            let hasQuads = config.targetNamedGraph !== undefined;
+            if (quads.some(q => !q.graph.equals(df.defaultGraph()))) {
+                hasQuads = true;
+            }
+            const writer = new N3Writer({ format: hasQuads ? "N-Quads" : "N-Triples" });
             const serialized = writer.quadsToString(quads);
             const url = new URL(config.graphStoreUrl!);
             if (config.accessToken) {
@@ -152,7 +157,7 @@ export async function doSPARQLRequest(
             const res = await fetch(url.toString(), {
                 method: "POST",
                 headers: {
-                    'Content-Type': 'application/n-quads',
+                    'Content-Type': hasQuads ? 'application/n-quads' : 'application/n-triples',
                 },
                 body: serialized,
                 dispatcher: new Agent({
