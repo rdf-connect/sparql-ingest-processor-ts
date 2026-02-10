@@ -36,6 +36,8 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
 
     let server: FastifyInstance;
     let reqCount = 0;
+    let gotNTriples = false;
+    let gotNQuads = false;
 
     const logger = winston.createLogger({
         transports: [new winston.transports.Console()],
@@ -55,9 +57,18 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
                 }
             );
             server.addContentTypeParser(
+                "application/n-triples",
+                { parseAs: 'string' },
+                (req, body, done) => {
+                    gotNTriples = true;
+                    done(null, body);
+                }
+            );
+            server.addContentTypeParser(
                 "application/n-quads",
                 { parseAs: 'string' },
                 (req, body, done) => {
+                    gotNQuads = true;
                     done(null, body);
                 }
             );
@@ -80,6 +91,8 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
 
     afterEach(() => {
         reqCount = 0;
+        gotNTriples = false;
+        gotNQuads = false;
     });
 
     afterAll(async () => {
@@ -925,7 +938,7 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         expect(reqCount).toBe(2);
     });
 
-    test("Replication mode: Non-SDS data into an empty SPARQL endpoint", async () => {
+    test("Replication mode: Non-SDS data (quads) into an empty SPARQL endpoint", async () => {
         const runner = createRunner();
         const [memberStreamWriter, memberStream] = channel(runner, "members");
         const [sparqlWriter, memberStreamReader] = channel(runner, "queries");
@@ -972,6 +985,56 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
 
         // Check that the number of requests made to the mock server is correct
         expect(reqCount).toBe(2);
+        expect(gotNQuads).toBe(true);
+    });
+
+    test("Replication mode: Non-SDS data (triples) into an empty SPARQL endpoint", async () => {
+        const runner = createRunner();
+        const [memberStreamWriter, memberStream] = channel(runner, "members");
+        const [sparqlWriter, memberStreamReader] = channel(runner, "queries");
+
+        consumeOutput(memberStreamReader, async (query) => {
+            expect(query).toBeDefined();
+        });
+
+        const checkOutput = async (reader: Reader) => {
+            for await (const query of reader.strings()) {
+
+            }
+        };
+
+        checkOutput(memberStreamReader);
+
+        const config: IngestConfig = {
+            operationMode: OperationMode.REPLICATION,
+            graphStoreUrl: "http://localhost:3000/sparql",
+            memberBatchSize: 5
+        };
+
+        // Execute processor function
+        const sparqlIngest = <FullProc<SPARQLIngest>>new SPARQLIngest({
+            memberStream,
+            config,
+            sparqlWriter
+        }, logger);
+
+        await sparqlIngest.init();
+        const processingPromise = sparqlIngest.transform();
+
+        // Send more than batch size to trigger batch and have leftovers for flush
+        const member = await readFile("./tests/data/non-sds-data.nq", "utf-8");
+        for (let i = 0; i < 6; i++) {
+            await memberStreamWriter.string(member);
+        }
+        // Close the member stream
+        await memberStreamWriter.close();
+
+        expect(reqCount).toBe(1);
+        await processingPromise;
+
+        // Check that the number of requests made to the mock server is correct
+        expect(reqCount).toBe(2);
+        expect(gotNTriples).toBe(true);
     });
 
     test("Transaction-aware SDS Member ingestion into a SPARQL endpoint (with shape description for deletes)", async () => {
