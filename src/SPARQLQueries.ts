@@ -39,7 +39,7 @@ export const CREATE = (
                 return df.quad(q.subject, q.predicate, q.object, df.defaultGraph());
             }))}
                     ${graph.equals(df.defaultGraph()) ? "" : `}`}
-                };
+                }
             `);
         });
     }
@@ -75,7 +75,7 @@ export const UPDATE = (
             }
             WHERE { 
                 ${formattedQuery[0]} 
-            };
+            }
         `];
 
         subStores.forEach((s, i) => {
@@ -86,7 +86,7 @@ export const UPDATE = (
                 return df.quad(q.subject, q.predicate, q.object, df.defaultGraph());
             }))}
                     ${graph.equals(df.defaultGraph()) ? "" : `}`}
-                };
+                }
             `);
         });
 
@@ -117,7 +117,7 @@ export const DELETE = (
                 ${deleteBuilder}
             } WHERE {
                 ${whereBuilder}
-            };
+            }
         `);
     }
 

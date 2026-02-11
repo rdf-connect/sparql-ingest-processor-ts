@@ -3,10 +3,10 @@ import { DataFactory } from "rdf-data-factory";
 import { RdfStore } from "rdf-stores";
 import { Agent } from "undici";
 import { Writer as N3Writer } from "n3";
+import { Logger } from "winston";
 
 import type { Term, Quad_Subject, Quad_Object, Quad, Quad_Graph } from "@rdfjs/types";
 import type { IngestConfig } from "./SPARQLIngest";
-import { Logger } from "winston";
 
 const df = new DataFactory();
 
@@ -186,6 +186,7 @@ export async function doSPARQLRequest(
         }
 
         for (const q of queries) {
+            logger.error(q);
             logger.debug(`[doSPARQLRequest] Executing SPARQL query: \n${q}`);
             const res = await fetch(config.graphStoreUrl!, {
                 method: "POST",
