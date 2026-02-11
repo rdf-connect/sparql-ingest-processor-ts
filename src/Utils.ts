@@ -186,7 +186,6 @@ export async function doSPARQLRequest(
         }
 
         for (const q of queries) {
-            logger.error(q);
             logger.debug(`[doSPARQLRequest] Executing SPARQL query: \n${q}`);
             const res = await fetch(config.graphStoreUrl!, {
                 method: "POST",

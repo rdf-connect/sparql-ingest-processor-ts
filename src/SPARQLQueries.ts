@@ -199,39 +199,3 @@ function formatQuery(
         return [queryBuilder.join("\n"), deleteQueryBuilder.join("\n")];
     }
 }
-
-// Find the main target class of a given Shape Graph.
-// We determine this by assuming that the main node shape
-// is not referenced by any other shape description.
-// If more than one is found an exception is thrown.
-function extractMainTargetClass(store: RdfStore): Quad_Object {
-    const nodeShapes = getSubjects(store, RDF.terms.type, SHACL.terms.NodeShape, null);
-    let mainNodeShape = null;
-
-    if (nodeShapes && nodeShapes.length > 0) {
-        for (const ns of nodeShapes) {
-            const isNotReferenced = getSubjects(store, null, ns, null).length === 0;
-
-            if (isNotReferenced) {
-                if (!mainNodeShape) {
-                    mainNodeShape = ns;
-                } else {
-                    throw new Error("There are multiple main node shapes in a given shape."
-                        + " Unrelated shapes must be given as separate member shapes");
-                }
-            }
-        }
-        if (mainNodeShape) {
-            const tcq = getObjects(store, mainNodeShape, SHACL.terms.targetClass, null)[0];
-            if (tcq) {
-                return tcq;
-            } else {
-                throw new Error("No target class found in main SHACL Node Shapes");
-            }
-        } else {
-            throw new Error("No main SHACL Node Shapes found in given member shape");
-        }
-    } else {
-        throw new Error("No SHACL Node Shapes found in given member shape");
-    }
-}
