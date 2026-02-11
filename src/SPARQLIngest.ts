@@ -287,7 +287,7 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
             if (this.config.graphStoreUrl) {
                try {
                   const t0 = Date.now();
-                  await doSPARQLRequest(query, this.config, this.doSPARQLRequestLogger);
+                  await doSPARQLRequest(query, this.config, this.logger);
                   const reqTime = Date.now() - t0;
                   if (this.config.measurePerformance) {
                      this.requestsPerformance.push(reqTime);
@@ -311,7 +311,7 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
                      await this.sparqlWriter.string(q);
                   }
                } else {
-                  await this.sparqlWriter.string(query.join("\n"));
+                  await this.sparqlWriter.string(query.join(";\n"));
                }
             }
          } else {
@@ -319,7 +319,7 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
                try {
                   // Execute the ingestion of the collected member batch via the SPARQL Graph Store protocol
                   const t0 = Date.now();
-                  await doSPARQLRequest(this.memberBatch, this.config, this.doSPARQLRequestLogger);
+                  await doSPARQLRequest(this.memberBatch, this.config, this.logger);
                   const reqTime = Date.now() - t0;
                   if (this.config.measurePerformance) {
                      this.requestsPerformance.push(reqTime);
@@ -348,7 +348,7 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
          try {
             // Execute the ingestion of the collected member batch via the SPARQL Graph Store protocol
             const t0 = Date.now();
-            await doSPARQLRequest(this.memberBatch, this.config, this.doSPARQLRequestLogger);
+            await doSPARQLRequest(this.memberBatch, this.config, this.logger);
             const reqTime = Date.now() - t0;
             if (this.config.measurePerformance) {
                this.requestsPerformance.push(reqTime);
@@ -432,20 +432,20 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
 
       // Build multi-operation SPARQL query
       if (createStore.size > 0) {
-         transactionQueryBuilder.push(CREATE(createStore, config.forVirtuoso).join("\n"));
+         transactionQueryBuilder.push(...CREATE(createStore, config.forVirtuoso));
       }
       if (updateStore.size > 0) {
-         transactionQueryBuilder.push(UPDATE(updateStore, config.forVirtuoso).join("\n"));
+         transactionQueryBuilder.push(...UPDATE(updateStore, config.forVirtuoso));
       }
       if (deleteStore.size > 0) {
          deleteMembers.forEach(dm => {
-            transactionQueryBuilder.push(DELETE(
+            transactionQueryBuilder.push(...DELETE(
                deleteStore,
                dm,
                config.memberShape,
-            ).join("\n"));
+            ));
          });
       }
-      return transactionQueryBuilder.join("\n");
+      return transactionQueryBuilder.join(";\n");
    }
 }
