@@ -168,6 +168,8 @@ export async function doSPARQLRequest(
             if (!res.ok) {
                 throw new Error(`HTTP request failed with code ${res.status} and message: \n${await res.text()}`);
             }
+            // Consume the response body to prevent memory leaks
+            await res.text();
             return;
         }
 
@@ -199,6 +201,8 @@ export async function doSPARQLRequest(
             if (!res.ok) {
                 throw new Error(`HTTP request failed with code ${res.status} and message: \n${await res.text()}`);
             }
+            // Consume the response body to prevent memory leaks
+            await res.text();
         }
     } catch (err: unknown) {
         logger.error(`Error while executing SPARQL request: ${(<Error>err).message} - ${(<Error>err).cause}`);
