@@ -133,6 +133,7 @@ export function sanitizeQuads(store: RdfStore): void {
 export async function doSPARQLRequest(
     query: string[] | Quad[],
     config: IngestConfig,
+    dispatcher: Agent,
     logger: Logger
 ): Promise<void> {
     try {
@@ -160,10 +161,8 @@ export async function doSPARQLRequest(
                     'Content-Type': hasQuads ? 'application/n-quads' : 'application/n-triples',
                 },
                 body: serialized,
-                dispatcher: new Agent({
-                    headersTimeout: timeout * 1000,
-                    bodyTimeout: timeout * 1000,
-                }),
+                // Use custom dispatcher to control request timeout
+                dispatcher,
             });
 
             if (!res.ok) {
@@ -193,11 +192,8 @@ export async function doSPARQLRequest(
                     'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
                 },
                 body: `update=${fixedEncodeURIComponent(q)}${config.accessToken ? `&access-token=${config.accessToken}` : ''}`,
-                // Set the request timeout to accomodate for slow SPARQL engines.
-                dispatcher: new Agent({
-                    headersTimeout: timeout * 1000,
-                    bodyTimeout: timeout * 1000,
-                }),
+                // Use custom dispatcher to control request timeout
+                dispatcher,
             });
 
             if (!res.ok) {

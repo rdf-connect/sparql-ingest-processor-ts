@@ -1,5 +1,6 @@
 import { Processor, extendLogger } from "@rdfc/js-runner";
 import { SDS } from "@treecg/types";
+import { Agent } from "undici";
 import { DataFactory } from "rdf-data-factory";
 import { RdfStore } from "rdf-stores";
 import { Parser } from "n3";
@@ -72,6 +73,7 @@ type SPARQLIngestArgs = {
 }
 
 export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
+   protected globalDispatcher: Agent;
    protected transactionMembers: TransactionMember[] = [];
    protected memberBatch: Quad[] = [];
    protected requestsPerformance: number[] = [];
@@ -83,6 +85,12 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
    async init(this: SPARQLIngestArgs & this): Promise<void> {
       this.createTransactionQueriesLogger = extendLogger(this.logger, "createTransactionQueries");
       this.doSPARQLRequestLogger = extendLogger(this.logger, "doSPARQLRequest");
+
+      // HTTP requests timeouts (defaults to 10 minutes if not specified)
+      this.globalDispatcher = new Agent({
+         headersTimeout: (this.config.measurePerformance?.queryTimeout || 600) * 1000,
+         bodyTimeout: (this.config.measurePerformance?.queryTimeout || 600) * 1000,
+      });
 
       if (!this.config.operationMode) {
          this.config.operationMode = OperationMode.SYNC;
@@ -287,7 +295,12 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
             if (this.config.graphStoreUrl) {
                try {
                   const t0 = Date.now();
-                  await doSPARQLRequest(query, this.config, this.logger);
+                  await doSPARQLRequest(
+                     query,
+                     this.config,
+                     this.globalDispatcher,
+                     this.logger
+                  );
                   const reqTime = Date.now() - t0;
                   if (this.config.measurePerformance) {
                      this.requestsPerformance.push(reqTime);
@@ -319,7 +332,12 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
                try {
                   // Execute the ingestion of the collected member batch via the SPARQL Graph Store protocol
                   const t0 = Date.now();
-                  await doSPARQLRequest(this.memberBatch, this.config, this.logger);
+                  await doSPARQLRequest(
+                     this.memberBatch,
+                     this.config,
+                     this.globalDispatcher,
+                     this.logger
+                  );
                   const reqTime = Date.now() - t0;
                   if (this.config.measurePerformance) {
                      this.requestsPerformance.push(reqTime);
@@ -348,7 +366,12 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
          try {
             // Execute the ingestion of the collected member batch via the SPARQL Graph Store protocol
             const t0 = Date.now();
-            await doSPARQLRequest(this.memberBatch, this.config, this.logger);
+            await doSPARQLRequest(
+               this.memberBatch,
+               this.config,
+               this.globalDispatcher,
+               this.logger
+            );
             const reqTime = Date.now() - t0;
             if (this.config.measurePerformance) {
                this.requestsPerformance.push(reqTime);
@@ -379,6 +402,9 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
             "utf-8"
          );
       }
+
+      // Gracefully close the global dispatcher
+      await this.globalDispatcher.close();
    }
 
    async produce(this: SPARQLIngestArgs & this): Promise<void> {
