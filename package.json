@@ -30,7 +30,7 @@
         "@treecg/types": "^0.4.6",
         "n3": "^1.26.0",
         "rdf-data-factory": "^2.0.2",
-        "rdf-stores": "^2.1.1",
+        "rdf-stores": "^2.2.0",
         "undici": "^7.22.0",
         "winston": "^3.19.0"
     },
