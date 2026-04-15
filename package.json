@@ -31,7 +31,7 @@
         "n3": "^1.26.0",
         "rdf-data-factory": "^2.0.2",
         "rdf-stores": "^2.2.0",
-        "undici": "^7.24.8",
+        "undici": "^7.25.0",
         "winston": "^3.19.0"
     },
     "devDependencies": {
@@ -40,8 +40,8 @@
         "@rdfjs/types": "^2.0.1",
         "@types/n3": "^1.26.1",
         "@types/node": "^25.6.0",
-        "@typescript-eslint/eslint-plugin": "^8.58.1",
-        "@typescript-eslint/parser": "^8.58.1",
+        "@typescript-eslint/eslint-plugin": "^8.58.2",
+        "@typescript-eslint/parser": "^8.58.2",
         "@vitest/coverage-v8": "^4.1.4",
         "eslint": "^9.39.3",
         "eslint-config-prettier": "^10.1.8",
