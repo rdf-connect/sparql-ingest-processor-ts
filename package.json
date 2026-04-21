@@ -35,13 +35,13 @@
         "winston": "^3.19.0"
     },
     "devDependencies": {
-        "@comunica/query-sparql": "^5.2.0",
+        "@comunica/query-sparql": "^5.2.1",
         "@rdfc/js-runner": "^3.1.0",
         "@rdfjs/types": "^2.0.1",
         "@types/n3": "^1.26.1",
         "@types/node": "^25.6.0",
-        "@typescript-eslint/eslint-plugin": "^8.58.2",
-        "@typescript-eslint/parser": "^8.58.2",
+        "@typescript-eslint/eslint-plugin": "^8.59.0",
+        "@typescript-eslint/parser": "^8.59.0",
         "@vitest/coverage-v8": "^4.1.4",
         "eslint": "^9.39.3",
         "eslint-config-prettier": "^10.1.8",
