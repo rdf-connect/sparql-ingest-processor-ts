@@ -35,11 +35,11 @@
         "winston": "^3.19.0"
     },
     "devDependencies": {
-        "@comunica/query-sparql": "^5.2.3",
+        "@comunica/query-sparql": "^5.2.4",
         "@rdfc/js-runner": "^3.1.0",
         "@rdfjs/types": "^2.0.1",
         "@types/n3": "^1.26.1",
-        "@types/node": "^25.9.3",
+        "@types/node": "^25.9.4",
         "@typescript-eslint/eslint-plugin": "^8.61.1",
         "@typescript-eslint/parser": "^8.61.1",
         "@vitest/coverage-v8": "^4.1.9",
