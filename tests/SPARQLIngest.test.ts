@@ -148,6 +148,9 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         });
 
         const config: IngestConfig = {
+            operationMode: OperationMode.SYNC,
+            memberBatchSize: 100,
+            forVirtuoso: false,
             changeSemantics: {
                 changeTypePath: "https://example.org/ns#changeType",
                 createValue: "https://example.org/ns#Create",
@@ -235,7 +238,11 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
             await memberStreamWriter.close();
         });
 
-        const config: IngestConfig = {};
+        const config: IngestConfig = {
+            operationMode: OperationMode.SYNC,
+            memberBatchSize: 100,
+            forVirtuoso: false,
+        };
 
         // Execute processor function
         const sparqlIngest = <FullProc<SPARQLIngest>>new SPARQLIngest({
@@ -322,7 +329,11 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
             await memberStreamWriter.close();
         });
 
-        const config: IngestConfig = {};
+        const config: IngestConfig = {
+            operationMode: OperationMode.SYNC,
+            memberBatchSize: 100,
+            forVirtuoso: false,
+        };
 
         // Execute processor function
         const sparqlIngest = <FullProc<SPARQLIngest>>new SPARQLIngest({
@@ -371,6 +382,8 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         });
 
         const config: IngestConfig = {
+            operationMode: OperationMode.SYNC,
+            memberBatchSize: 100,
             forVirtuoso: true,
             graphStoreUrl: "http://localhost:3000/sparql",
         };
@@ -434,6 +447,9 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         });
 
         const config: IngestConfig = {
+            operationMode: OperationMode.SYNC,
+            memberBatchSize: 100,
+            forVirtuoso: false,
             graphStoreUrl: "http://localhost:3000/sparql",
         };
 
@@ -484,6 +500,9 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         });
 
         const config: IngestConfig = {
+            operationMode: OperationMode.SYNC,
+            memberBatchSize: 100,
+            forVirtuoso: false,
             graphStoreUrl: "http://localhost:3000/sparql",
         };
 
@@ -525,6 +544,8 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         });
 
         const config: IngestConfig = {
+            operationMode: OperationMode.SYNC,
+            memberBatchSize: 100,
             forVirtuoso: true,
             graphStoreUrl: "http://localhost:3000/sparql",
         };
@@ -601,6 +622,9 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         });
 
         const config: IngestConfig = {
+            operationMode: OperationMode.SYNC,
+            memberBatchSize: 100,
+            forVirtuoso: false,
             changeSemantics: {
                 changeTypePath: "https://example.org/ns#changeType",
                 createValue: "https://example.org/ns#Create",
@@ -667,6 +691,9 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         });
 
         const config: IngestConfig = {
+            operationMode: OperationMode.SYNC,
+            memberBatchSize: 100,
+            forVirtuoso: false,
             memberShape: ENTITY_SHAPE,
             changeSemantics: {
                 changeTypePath: "https://example.org/ns#changeType",
@@ -732,6 +759,9 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         });
 
         const config: IngestConfig = {
+            operationMode: OperationMode.SYNC,
+            memberBatchSize: 100,
+            forVirtuoso: false,
             memberShape: ENTITY_SHAPE,
             changeSemantics: {
                 changeTypePath: "https://example.org/ns#changeType",
@@ -803,6 +833,8 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         });
 
         const config: IngestConfig = {
+            operationMode: OperationMode.SYNC,
+            memberBatchSize: 100,
             forVirtuoso: true,
             graphStoreUrl: "http://localhost:3000/sparql",
         };
@@ -857,6 +889,8 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         });
 
         const config: IngestConfig = {
+            operationMode: OperationMode.SYNC,
+            memberBatchSize: 100,
             forVirtuoso: true,
             graphStoreUrl: "http://localhost:3000/sparql",
             targetNamedGraph: "http://example.org/graph"
@@ -905,6 +939,7 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         });
 
         const config: IngestConfig = {
+            forVirtuoso: false,
             operationMode: OperationMode.REPLICATION,
             graphStoreUrl: "http://localhost:3000/sparql",
             targetNamedGraph: "http://example.org/graph",
@@ -956,6 +991,7 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         checkOutput(memberStreamReader);
 
         const config: IngestConfig = {
+            forVirtuoso: false,
             operationMode: OperationMode.REPLICATION,
             graphStoreUrl: "http://localhost:3000/sparql",
             targetNamedGraph: "http://example.org/graph",
@@ -1006,6 +1042,7 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         checkOutput(memberStreamReader);
 
         const config: IngestConfig = {
+            forVirtuoso: false,
             operationMode: OperationMode.REPLICATION,
             graphStoreUrl: "http://localhost:3000/sparql",
             memberBatchSize: 5
@@ -1114,6 +1151,9 @@ describe("Functional tests for the sparqlIngest RDF-Connect function", () => {
         });
 
         const config: IngestConfig = {
+            operationMode: OperationMode.SYNC,
+            memberBatchSize: 100,
+            forVirtuoso: false,
             changeSemantics: {
                 changeTypePath: "https://example.org/ns#changeType",
                 createValue: "https://example.org/ns#Create",

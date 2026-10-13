@@ -77,4 +77,35 @@ describe("Tests for SPARQL ingest processor", async () => {
         expect(proc.config.measurePerformance!.failureIsFatal).toBeTruthy();
         expect(proc.config.measurePerformance!.queryTimeout).toBe(30);
     });
+
+    test("rdfc:SPARQLIngest falls back to its default values", async () => {
+        const processor = `
+            @prefix rdfc: <https://w3id.org/rdf-connect#>.
+
+            <http://example.com/ns#processor> a rdfc:SPARQLIngest;
+                rdfc:memberStream <inputChannel>;
+                rdfc:ingestConfig [
+                    rdfc:measurePerformance [
+                        rdfc:name "PerformanceTest";
+                        rdfc:outputPath "/some/output/path"
+                    ]
+                ].
+        `;
+
+        const configLocation = process.cwd() + "/processors.ttl";
+
+        const procHelper = new ProcHelper<FullProc<SPARQLIngest>>();
+        await procHelper.importFile(configLocation);
+        await procHelper.importInline("pipeline.ttl", processor);
+        procHelper.getConfig("SPARQLIngest");
+
+        const proc: FullProc<SPARQLIngest> = await procHelper.getProcessor("http://example.com/ns#processor");
+
+        expect(proc.sparqlWriter).toBeUndefined();
+        expect(proc.config.operationMode).toBe(OperationMode.SYNC);
+        expect(proc.config.memberBatchSize).toBe(100);
+        expect(proc.config.forVirtuoso).toBe(false);
+        expect(proc.config.measurePerformance!.failureIsFatal).toBe(false);
+        expect(proc.config.measurePerformance!.queryTimeout).toBeUndefined();
+    });
 });
