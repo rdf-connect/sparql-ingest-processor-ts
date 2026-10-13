@@ -120,6 +120,7 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:path rdfc:queryTimeout;
     sh:datatype xsd:integer;
     sh:name "queryTimeout";
+    sh:defaultValue 1800;
     sh:maxCount 1;
     sh:minCount 0;
   ].

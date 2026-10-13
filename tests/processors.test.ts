@@ -106,6 +106,6 @@ describe("Tests for SPARQL ingest processor", async () => {
         expect(proc.config.memberBatchSize).toBe(100);
         expect(proc.config.forVirtuoso).toBe(false);
         expect(proc.config.measurePerformance!.failureIsFatal).toBe(false);
-        expect(proc.config.measurePerformance!.queryTimeout).toBeUndefined();
+        expect(proc.config.measurePerformance!.queryTimeout).toBe(1800);
     });
 });
