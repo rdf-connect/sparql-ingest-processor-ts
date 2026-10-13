@@ -6,7 +6,7 @@ import { RdfStore } from "rdf-stores";
 import { Parser } from "n3";
 import { writeFile } from "fs/promises";
 import { CREATE, DELETE, UPDATE } from "./SPARQLQueries";
-import { doSPARQLRequest, getObjects, sanitizeQuads } from "./Utils";
+import { DEFAULT_QUERY_TIMEOUT, doSPARQLRequest, getObjects, sanitizeQuads } from "./Utils";
 import { Logger } from "winston";
 
 import type {
@@ -38,7 +38,7 @@ export type TransactionConfig = {
 export type PerformanceConfig = {
    name: string;
    outputPath: string;
-   queryTimeout?: number; // Timeout for SPARQL queries in seconds
+   queryTimeout: number; // Timeout for SPARQL queries in seconds
    failureIsFatal: boolean;
 };
 
@@ -86,10 +86,11 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
       this.createTransactionQueriesLogger = extendLogger(this.logger, "createTransactionQueries");
       this.doSPARQLRequestLogger = extendLogger(this.logger, "doSPARQLRequest");
 
-      // HTTP requests timeouts (defaults to 10 minutes if not specified)
+      // HTTP requests timeouts
+      const queryTimeout = this.config.measurePerformance?.queryTimeout ?? DEFAULT_QUERY_TIMEOUT;
       this.globalDispatcher = new Agent({
-         headersTimeout: (this.config.measurePerformance?.queryTimeout || 600) * 1000,
-         bodyTimeout: (this.config.measurePerformance?.queryTimeout || 600) * 1000,
+         headersTimeout: queryTimeout * 1000,
+         bodyTimeout: queryTimeout * 1000,
       });
 
       if (this.config.accessToken === "") {
