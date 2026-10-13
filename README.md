@@ -65,9 +65,9 @@ npm install @rdfc/sparql-ingest-processor-ts
         rdfc:accessToken "myAccessToken";
         rdfc:measurePerformance [
             rdfc:name "myPerformanceMeasurement";
-            rdfc:outputPath "/path/to/output.json";
+            rdfc:outputPath "/path/to/output";
             rdfc:failureIsFatal true;
-            rdfc:queryTimeout 30000
+            rdfc:queryTimeout 1800
         ]
     ];
     rdfc:sparqlWriter <out>.
@@ -85,14 +85,14 @@ npm install @rdfc/sparql-ingest-processor-ts
 ---
 
 ### Parameters of `rdfc:IngestConfig`:
-- `rdfc:operationMode` (**string**, optional): Operation mode of the processor. Can be `Replication` or `Sync`. `Replication` mode uses the [SPARQL Graph Store Protocol](https://www.w3.org/TR/sparql11-http-rdf-update/) to ingest data directly into a triple store, which assumes that all received data is meant to be added. `Sync` mode uses the [SPARQL UPDATE specification](https://www.w3.org/TR/sparql11-update/) to ingest data via SPARQL queries, which allows for all CRUD operations.
-- `rdfc:memberBatchSize` (**integer**, optional): Number of input records to batch together for ingestion when running in `Replication` mode.
+- `rdfc:operationMode` (**string**, optional): Operation mode of the processor. Can be `Replication` or `Sync`. `Replication` mode uses the [SPARQL Graph Store Protocol](https://www.w3.org/TR/sparql11-http-rdf-update/) to ingest data directly into a triple store, which assumes that all received data is meant to be added. `Sync` mode uses the [SPARQL UPDATE specification](https://www.w3.org/TR/sparql11-update/) to ingest data via SPARQL queries, which allows for all CRUD operations. Default: `Sync`.
+- `rdfc:memberBatchSize` (**integer**, optional): Number of input records to batch together for ingestion when running in `Replication` mode. Default: `100`.
 - `rdfc:memberShape` (**string**, optional): SHACL shape used to guide query construction when payloads are incomplete.
 - `rdfc:changeSemantics` (**rdfc:ChangeSemantics**, optional): Configures mapping between change types (create/update/delete) and SPARQL operations.
 - `rdfc:targetNamedGraph` (**string**, optional): Force all operations into a specific named graph.
 - `rdfc:transactionConfig` (**rdfc:TransactionConfig**, optional): Groups records by transaction ID for atomic updates.
-- `rdfc:graphStoreUrl` (**string**, optional): SPARQL Graph Store endpoint URL.
-- `rdfc:forVirtuoso` (**boolean**, optional): Enables Virtuoso-specific handling to avoid query size limits.
+- `rdfc:graphStoreUrl` (**string** or IRI, optional): SPARQL Graph Store endpoint URL.
+- `rdfc:forVirtuoso` (**boolean**, optional): Enables Virtuoso-specific handling to avoid query size limits. Default: `false`.
 - `rdfc:accessToken` (**string**, optional): Access token for authenticated graph stores.
 - `rdfc:measurePerformance` (**rdfc:PerformanceConfig**, optional): Enables performance measurement of SPARQL queries.
 
@@ -114,9 +114,9 @@ npm install @rdfc/sparql-ingest-processor-ts
 
 ### Parameters of `rdfc:PerformanceConfig`:
 - `rdfc:name` (**string**, required): Name of the performance measurement run.
-- `rdfc:outputPath` (**string**, required): File path where performance logs will be written.
-- `rdfc:failureIsFatal` (**boolean**, optional): If true, aborts on performance measurement failure.
-- `rdfc:queryTimeout` (**integer**, optional): Maximum query execution time in milliseconds.
+- `rdfc:outputPath` (**string** or IRI, required): Existing folder where the performance log is written, as `<rdfc:name>.json`.
+- `rdfc:failureIsFatal` (**boolean**, optional): If true, aborts on performance measurement failure. Default: `false`.
+- `rdfc:queryTimeout` (**integer**, optional): Maximum query execution time in seconds. Default: `1800` (30 minutes), also when `rdfc:measurePerformance` is not set.
 
 ---
 
