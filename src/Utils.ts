@@ -4,6 +4,7 @@ import { RdfStore } from "rdf-stores";
 import { Agent } from "undici";
 import { Writer as N3Writer } from "n3";
 import { Logger } from "winston";
+import { fileURLToPath } from "url";
 
 import type { Term, Quad_Subject, Quad_Object, Quad, Quad_Graph } from "@rdfjs/types";
 import type { IngestConfig } from "./SPARQLIngest";
@@ -13,6 +14,14 @@ const df = new DataFactory();
 // Timeout for SPARQL queries in seconds, when no rdfc:measurePerformance is
 // given. Otherwise the default of rdfc:queryTimeout in processors.ttl applies.
 export const DEFAULT_QUERY_TIMEOUT = 1800;
+
+/**
+ * A location can be written as an IRI in the pipeline, which reaches the
+ * processor as a `file:` URL: turn that into a path, keep anything else.
+ */
+export function toPath(location: string): string {
+    return location.startsWith("file:") ? fileURLToPath(location) : location;
+}
 
 export function getSubjects(
     store: RdfStore,

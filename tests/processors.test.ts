@@ -1,6 +1,10 @@
 import { describe, expect, test } from "vitest";
 import { OperationMode, SPARQLIngest } from "../src/SPARQLIngest";
-import { ProcHelper } from "@rdfc/js-runner/lib/testUtils";
+import { toPath } from "../src/Utils";
+import { ProcHelper, channel, createRunner } from "@rdfc/js-runner/lib/testUtils";
+import { mkdir, readFile, rm } from "fs/promises";
+import { resolve } from "path";
+import { pathToFileURL } from "url";
 
 import type { FullProc } from "@rdfc/js-runner";
 
@@ -107,5 +111,61 @@ describe("Tests for SPARQL ingest processor", async () => {
         expect(proc.config.forVirtuoso).toBe(false);
         expect(proc.config.measurePerformance!.failureIsFatal).toBe(false);
         expect(proc.config.measurePerformance!.queryTimeout).toBe(1800);
+    });
+
+    test("URLs and the output path can be written as IRIs", async () => {
+        const processor = `
+            @prefix rdfc: <https://w3id.org/rdf-connect#>.
+
+            <http://example.com/ns#processor> a rdfc:SPARQLIngest;
+                rdfc:memberStream <inputChannel>;
+                rdfc:ingestConfig [
+                    rdfc:graphStoreUrl <http://ex.org/myGraphStore>;
+                    rdfc:measurePerformance [
+                        rdfc:name "PerformanceTest";
+                        rdfc:outputPath <./tests/perf-out>
+                    ]
+                ];
+                rdfc:sparqlWriter <outputChannel>.
+        `;
+
+        const procHelper = new ProcHelper<FullProc<SPARQLIngest>>();
+        await procHelper.importFile(process.cwd() + "/processors.ttl");
+        await procHelper.importInline(resolve("pipeline.ttl"), processor);
+        procHelper.getConfig("SPARQLIngest");
+
+        const proc: FullProc<SPARQLIngest> = await procHelper.getProcessor("http://example.com/ns#processor");
+
+        expect(proc.config.graphStoreUrl).toBe("http://ex.org/myGraphStore");
+        expect(proc.config.measurePerformance!.outputPath).toBe(
+            pathToFileURL(resolve("./tests/perf-out")).href,
+        );
+
+        // The performance log is written to the folder the IRI points to
+        const outDir = resolve("./tests/perf-out");
+        await mkdir(outDir, { recursive: true });
+        try {
+            const runner = createRunner();
+            const [memberStreamWriter, memberStream] = channel(runner, "members");
+            const ingest = <FullProc<SPARQLIngest>>new SPARQLIngest({
+                memberStream,
+                config: proc.config,
+            }, proc.logger);
+            await ingest.init();
+            const processing = ingest.transform();
+            await memberStreamWriter.close();
+            await processing;
+
+            const log = await readFile(resolve(outDir, "PerformanceTest.json"), "utf-8");
+            expect(JSON.parse(log)).toEqual([]);
+        } finally {
+            await rm(outDir, { recursive: true, force: true });
+        }
+    });
+
+    test("toPath keeps paths and turns file: URLs into paths", () => {
+        expect(toPath("/some/output/path")).toBe("/some/output/path");
+        expect(toPath("./perf")).toBe("./perf");
+        expect(toPath("file:///tmp/my%20perf")).toBe("/tmp/my perf");
     });
 });
