@@ -91,7 +91,7 @@ npm install @rdfc/sparql-ingest-processor-ts
 - `rdfc:changeSemantics` (**rdfc:ChangeSemantics**, optional): Configures mapping between change types (create/update/delete) and SPARQL operations.
 - `rdfc:targetNamedGraph` (**string**, optional): Force all operations into a specific named graph.
 - `rdfc:transactionConfig` (**rdfc:TransactionConfig**, optional): Groups records by transaction ID for atomic updates.
-- `rdfc:graphStoreUrl` (**string**, optional): SPARQL Graph Store endpoint URL.
+- `rdfc:graphStoreUrl` (**string** or IRI, optional): SPARQL Graph Store endpoint URL.
 - `rdfc:forVirtuoso` (**boolean**, optional): Enables Virtuoso-specific handling to avoid query size limits. Default: `false`.
 - `rdfc:accessToken` (**string**, optional): Access token for authenticated graph stores.
 - `rdfc:measurePerformance` (**rdfc:PerformanceConfig**, optional): Enables performance measurement of SPARQL queries.
@@ -114,7 +114,7 @@ npm install @rdfc/sparql-ingest-processor-ts
 
 ### Parameters of `rdfc:PerformanceConfig`:
 - `rdfc:name` (**string**, required): Name of the performance measurement run.
-- `rdfc:outputPath` (**string**, required): File path where performance logs will be written.
+- `rdfc:outputPath` (**string** or IRI, required): File path where performance logs will be written.
 - `rdfc:failureIsFatal` (**boolean**, optional): If true, aborts on performance measurement failure. Default: `false`.
 - `rdfc:queryTimeout` (**integer**, optional): Maximum query execution time in seconds. Default: `1800` (30 minutes), also when `rdfc:measurePerformance` is not set.
 

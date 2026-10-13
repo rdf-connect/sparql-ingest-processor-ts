@@ -6,7 +6,7 @@ import { RdfStore } from "rdf-stores";
 import { Parser } from "n3";
 import { writeFile } from "fs/promises";
 import { CREATE, DELETE, UPDATE } from "./SPARQLQueries";
-import { DEFAULT_QUERY_TIMEOUT, doSPARQLRequest, getObjects, sanitizeQuads } from "./Utils";
+import { DEFAULT_QUERY_TIMEOUT, doSPARQLRequest, getObjects, sanitizeQuads, toPath } from "./Utils";
 import { Logger } from "winston";
 
 import type {
@@ -390,7 +390,7 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
       }
       if (this.config.measurePerformance) {
          await writeFile(
-            `${this.config.measurePerformance.outputPath}/${this.config.measurePerformance.name}.json`,
+            `${toPath(this.config.measurePerformance.outputPath)}/${this.config.measurePerformance.name}.json`,
             JSON.stringify(this.requestsPerformance),
             "utf-8"
          );
