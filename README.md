@@ -65,7 +65,7 @@ npm install @rdfc/sparql-ingest-processor-ts
         rdfc:accessToken "myAccessToken";
         rdfc:measurePerformance [
             rdfc:name "myPerformanceMeasurement";
-            rdfc:outputPath "/path/to/output.json";
+            rdfc:outputPath "/path/to/output";
             rdfc:failureIsFatal true;
             rdfc:queryTimeout 1800
         ]
@@ -114,7 +114,7 @@ npm install @rdfc/sparql-ingest-processor-ts
 
 ### Parameters of `rdfc:PerformanceConfig`:
 - `rdfc:name` (**string**, required): Name of the performance measurement run.
-- `rdfc:outputPath` (**string** or IRI, required): File path where performance logs will be written.
+- `rdfc:outputPath` (**string** or IRI, required): Existing folder where the performance log is written, as `<rdfc:name>.json`.
 - `rdfc:failureIsFatal` (**boolean**, optional): If true, aborts on performance measurement failure. Default: `false`.
 - `rdfc:queryTimeout` (**integer**, optional): Maximum query execution time in seconds. Default: `1800` (30 minutes), also when `rdfc:measurePerformance` is not set.
 
