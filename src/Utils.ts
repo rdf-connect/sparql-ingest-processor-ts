@@ -10,6 +10,10 @@ import type { IngestConfig } from "./SPARQLIngest";
 
 const df = new DataFactory();
 
+// Timeout for SPARQL queries in seconds, when no rdfc:measurePerformance is
+// given. Otherwise the default of rdfc:queryTimeout in processors.ttl applies.
+export const DEFAULT_QUERY_TIMEOUT = 1800;
+
 export function getSubjects(
     store: RdfStore,
     predicate: Term | null,
@@ -137,7 +141,7 @@ export async function doSPARQLRequest(
     logger: Logger
 ): Promise<void> {
     try {
-        const timeout = config.measurePerformance?.queryTimeout || 1800; // Default to 30 minutes if not specified
+        const timeout = config.measurePerformance?.queryTimeout ?? DEFAULT_QUERY_TIMEOUT;
         // Check if the query is a Quad array (for Replication mode)
         if (query.length > 0 && typeof query[0] !== 'string') {
             const quads = query as Quad[];
