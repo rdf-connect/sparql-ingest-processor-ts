@@ -6,8 +6,9 @@ import { RdfStore } from "rdf-stores";
 import { Parser } from "n3";
 import { writeFile } from "fs/promises";
 import { CREATE, DELETE, UPDATE } from "./SPARQLQueries";
-import { DEFAULT_QUERY_TIMEOUT, doSPARQLRequest, getObjects, sanitizeQuads, toPath } from "./Utils";
+import { DEFAULT_QUERY_TIMEOUT, doSPARQLRequest, getObjects, sanitizeQuads } from "./Utils";
 import { Logger } from "winston";
+import { toPath } from "@rdfc/utils-js";
 
 import type {
    Quad,

@@ -1,10 +1,9 @@
 import { describe, expect, test } from "vitest";
 import { OperationMode, SPARQLIngest } from "../src/SPARQLIngest";
-import { toPath } from "../src/Utils";
 import { ProcHelper, channel, createRunner } from "@rdfc/js-runner/lib/testUtils";
 import { mkdir, readFile, rm } from "fs/promises";
 import { resolve } from "path";
-import { pathToFileURL } from "url";
+import { fromPath } from "@rdfc/utils-js";
 
 import type { FullProc } from "@rdfc/js-runner";
 
@@ -138,7 +137,7 @@ describe("Tests for SPARQL ingest processor", async () => {
 
         expect(proc.config.graphStoreUrl).toBe("http://ex.org/myGraphStore");
         expect(proc.config.measurePerformance!.outputPath).toBe(
-            pathToFileURL(resolve("./tests/perf-out")).href,
+            fromPath("./tests/perf-out"),
         );
 
         // The performance log is written to the folder the IRI points to
@@ -161,11 +160,5 @@ describe("Tests for SPARQL ingest processor", async () => {
         } finally {
             await rm(outDir, { recursive: true, force: true });
         }
-    });
-
-    test("toPath keeps paths and turns file: URLs into paths", () => {
-        expect(toPath("/some/output/path")).toBe("/some/output/path");
-        expect(toPath("./perf")).toBe("./perf");
-        expect(toPath("file:///tmp/my%20perf")).toBe("/tmp/my perf");
     });
 });
