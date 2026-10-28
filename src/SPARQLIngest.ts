@@ -6,8 +6,9 @@ import { RdfStore } from "rdf-stores";
 import { Parser } from "n3";
 import { writeFile } from "fs/promises";
 import { CREATE, DELETE, UPDATE } from "./SPARQLQueries";
-import { doSPARQLRequest, getObjects, sanitizeQuads } from "./Utils";
+import { DEFAULT_QUERY_TIMEOUT, doSPARQLRequest, getObjects, sanitizeQuads } from "./Utils";
 import { Logger } from "winston";
+import { toPath } from "@rdfc/utils-js";
 
 import type {
    Quad,
@@ -38,8 +39,8 @@ export type TransactionConfig = {
 export type PerformanceConfig = {
    name: string;
    outputPath: string;
-   queryTimeout?: number; // Timeout for SPARQL queries in seconds
-   failureIsFatal?: boolean;
+   queryTimeout: number; // Timeout for SPARQL queries in seconds
+   failureIsFatal: boolean;
 };
 
 export enum OperationMode {
@@ -48,14 +49,14 @@ export enum OperationMode {
 }
 
 export type IngestConfig = {
-   operationMode?: OperationMode;
-   memberBatchSize?: number;
+   operationMode: OperationMode;
+   memberBatchSize: number;
    memberShape?: string; // TODO: This should be obtained from an SDS metadata stream
    changeSemantics?: ChangeSemantics;
    targetNamedGraph?: string;
    transactionConfig?: TransactionConfig;
    graphStoreUrl?: string;
-   forVirtuoso?: boolean; // For handling the hardcoded query limitations of Virtuoso
+   forVirtuoso: boolean; // For handling the hardcoded query limitations of Virtuoso
    accessToken?: string; // For SPARQL endpoints that require authentication like Qlever
    measurePerformance?: PerformanceConfig;
 };
@@ -86,19 +87,12 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
       this.createTransactionQueriesLogger = extendLogger(this.logger, "createTransactionQueries");
       this.doSPARQLRequestLogger = extendLogger(this.logger, "doSPARQLRequest");
 
-      // HTTP requests timeouts (defaults to 10 minutes if not specified)
+      // HTTP requests timeouts
+      const queryTimeout = this.config.measurePerformance?.queryTimeout ?? DEFAULT_QUERY_TIMEOUT;
       this.globalDispatcher = new Agent({
-         headersTimeout: (this.config.measurePerformance?.queryTimeout || 600) * 1000,
-         bodyTimeout: (this.config.measurePerformance?.queryTimeout || 600) * 1000,
+         headersTimeout: queryTimeout * 1000,
+         bodyTimeout: queryTimeout * 1000,
       });
-
-      if (!this.config.operationMode) {
-         this.config.operationMode = OperationMode.SYNC;
-      }
-
-      if (!this.config.memberBatchSize) {
-         this.config.memberBatchSize = 100;
-      }
 
       if (this.config.accessToken === "") {
          this.config.accessToken = undefined;
@@ -262,7 +256,7 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
                   if (this.config.operationMode === OperationMode.REPLICATION) {
                      this.memberBatch.push(...store.getQuads());
                      this.batchCount++;
-                     if (this.batchCount < this.config.memberBatchSize!) {
+                     if (this.batchCount < this.config.memberBatchSize) {
                         continue;
                      }
                   } else {
@@ -281,7 +275,7 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
                // Build batch of quads that will be sent in one go using the SPARQL Graph Store protocol
                this.memberBatch.push(...store.getQuads());
                this.batchCount++;
-               if (this.batchCount < this.config.memberBatchSize!) {
+               if (this.batchCount < this.config.memberBatchSize) {
                   continue;
                }
             } else {
@@ -397,7 +391,7 @@ export class SPARQLIngest extends Processor<SPARQLIngestArgs> {
       }
       if (this.config.measurePerformance) {
          await writeFile(
-            `${this.config.measurePerformance.outputPath}/${this.config.measurePerformance.name}.json`,
+            `${toPath(this.config.measurePerformance.outputPath)}/${this.config.measurePerformance.name}.json`,
             JSON.stringify(this.requestsPerformance),
             "utf-8"
          );

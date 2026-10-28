@@ -37,11 +37,13 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:path rdfc:operationMode;
     sh:datatype xsd:string;
     sh:name "operationMode";
+    sh:defaultValue "Sync";
     sh:maxCount 1;
   ], [
     sh:path rdfc:memberBatchSize;
     sh:datatype xsd:integer;
     sh:name "memberBatchSize";
+    sh:defaultValue 100;
     sh:maxCount 1;
   ], [
     sh:path rdfc:memberShape;
@@ -68,7 +70,8 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:minCount 0;
   ], [
     sh:path rdfc:graphStoreUrl;
-    sh:datatype xsd:string;
+    sh:nodeKind sh:IRIOrLiteral;
+    sh:codeType xsd:string;
     sh:name "graphStoreUrl";
     sh:maxCount 1;
     sh:minCount 0;
@@ -76,6 +79,7 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:path rdfc:forVirtuoso;
     sh:datatype xsd:boolean;
     sh:name "forVirtuoso";
+    sh:defaultValue false;
     sh:maxCount 1;
     sh:minCount 0;
   ], [
@@ -102,7 +106,8 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:minCount 1;
   ], [
     sh:path rdfc:outputPath;
-    sh:datatype xsd:string;
+    sh:nodeKind sh:IRIOrLiteral;
+    sh:codeType xsd:string;
     sh:name "outputPath";
     sh:maxCount 1;
     sh:minCount 1;
@@ -110,12 +115,14 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:path rdfc:failureIsFatal;
     sh:datatype xsd:boolean;
     sh:name "failureIsFatal";
+    sh:defaultValue false;
     sh:maxCount 1;
     sh:minCount 0;
   ], [
     sh:path rdfc:queryTimeout;
     sh:datatype xsd:integer;
     sh:name "queryTimeout";
+    sh:defaultValue 1800;
     sh:maxCount 1;
     sh:minCount 0;
   ].
