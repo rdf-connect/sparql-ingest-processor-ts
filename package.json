@@ -28,7 +28,7 @@
     },
     "dependencies": {
         "@treecg/types": "^0.4.6",
-        "n3": "^1.26.0",
+        "n3": "^2.13.12",
         "rdf-data-factory": "^2.1.0",
         "rdf-stores": "^2.9.1",
         "undici": "^7.30.2",
