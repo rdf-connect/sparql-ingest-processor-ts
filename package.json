@@ -42,7 +42,7 @@
         "@types/node": "^25.9.9",
         "@typescript-eslint/eslint-plugin": "^8.72.2",
         "@typescript-eslint/parser": "^8.72.2",
-        "@vitest/coverage-v8": "^4.1.12",
+        "@vitest/coverage-v8": "^5.1.0",
         "eslint": "^9.39.3",
         "eslint-config-prettier": "^10.1.8",
         "fastify": "^5.12.8",
@@ -51,6 +51,6 @@
         "tsc-alias": "^1.9.10",
         "typescript": "^5.9.3",
         "vite-tsconfig-paths": "^6.1.1",
-        "vitest": "^4.1.12"
+        "vitest": "^5.1.0"
     }
 }
