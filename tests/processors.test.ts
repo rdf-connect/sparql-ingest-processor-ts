@@ -15,7 +15,7 @@ describe("Tests for SPARQL ingest processor", async () => {
             @prefix xsd: <http://www.w3.org/2001/XMLSchema#>.
 
             <http://example.com/ns#processor> a rdfcp:SPARQLIngest; 
-                rdfcp:memberStream <inputChannel>;
+                rdfcp:input <inputChannel>;
                 rdfcp:ingestConfig [
                     rdfcp:operationMode "Replication";
                     rdfcp:memberBatchSize 100;
@@ -41,7 +41,7 @@ describe("Tests for SPARQL ingest processor", async () => {
                         rdfcp:queryTimeout 30
                     ]
                 ];
-                rdfcp:sparqlWriter <outputChannel>.
+                rdfcp:output <outputChannel>.
         `;
 
         const configLocation = process.cwd() + "/processors.ttl";
@@ -88,7 +88,7 @@ describe("Tests for SPARQL ingest processor", async () => {
             @prefix rdfcp: <https://w3id.org/rdf-connect/processors#>.
 
             <http://example.com/ns#processor> a rdfcp:SPARQLIngest;
-                rdfcp:memberStream <inputChannel>;
+                rdfcp:input <inputChannel>;
                 rdfcp:ingestConfig [
                     rdfcp:measurePerformance [
                         rdfcp:name "PerformanceTest";
@@ -120,7 +120,7 @@ describe("Tests for SPARQL ingest processor", async () => {
             @prefix rdfcp: <https://w3id.org/rdf-connect/processors#>.
 
             <http://example.com/ns#processor> a rdfcp:SPARQLIngest;
-                rdfcp:memberStream <inputChannel>;
+                rdfcp:input <inputChannel>;
                 rdfcp:ingestConfig [
                     rdfcp:graphStoreUrl <http://ex.org/myGraphStore>;
                     rdfcp:measurePerformance [
@@ -128,7 +128,7 @@ describe("Tests for SPARQL ingest processor", async () => {
                         rdfcp:outputPath <./tests/perf-out>
                     ]
                 ];
-                rdfcp:sparqlWriter <outputChannel>.
+                rdfcp:output <outputChannel>.
         `;
 
         const procHelper = new ProcHelper<FullProc<SPARQLIngest>>();

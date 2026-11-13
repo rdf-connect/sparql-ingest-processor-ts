@@ -14,7 +14,7 @@ rdfcp:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
 [ ] a sh:NodeShape;
   sh:targetClass rdfcp:SPARQLIngest;
   sh:property [
-    sh:path rdfcp:memberStream;
+    sh:path rdfcp:input;
     sh:codeIdentifier "memberStream";
     sh:name "Input channel";
     sh:description "Input channel with the SDS records, or the quads, to ingest.";
@@ -30,7 +30,7 @@ rdfcp:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:minCount 1;
     sh:maxCount 1;
   ], [
-    sh:path rdfcp:sparqlWriter;
+    sh:path rdfcp:output;
     sh:codeIdentifier "sparqlWriter";
     sh:name "Output channel";
     sh:description "Output channel that receives the generated SPARQL queries.";
