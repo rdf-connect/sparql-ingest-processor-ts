@@ -10,8 +10,8 @@ import type { IngestConfig } from "./SPARQLIngest";
 
 const df = new DataFactory();
 
-// Timeout for SPARQL queries in seconds, when no rdfc:measurePerformance is
-// given. Otherwise the default of rdfc:queryTimeout in processors.ttl applies.
+// Timeout for SPARQL queries in seconds, when no rdfcp:measurePerformance is
+// given. Otherwise the default of rdfcp:queryTimeout in processors.ttl applies.
 export const DEFAULT_QUERY_TIMEOUT = 1800;
 
 export function getSubjects(
