@@ -8,39 +8,40 @@ import { fromPath } from "@rdfc/utils-js";
 import type { FullProc } from "@rdfc/js-runner";
 
 describe("Tests for SPARQL ingest processor", async () => {
-    test("rdfc:SPARQLIngest is properly defined", async () => {
+    test("rdfcp:SPARQLIngest is properly defined", async () => {
         const processor = `
             @prefix rdfc: <https://w3id.org/rdf-connect#>.
+            @prefix rdfcp: <https://w3id.org/rdf-connect/processors#>.
             @prefix xsd: <http://www.w3.org/2001/XMLSchema#>.
 
-            <http://example.com/ns#processor> a rdfc:SPARQLIngest; 
-                rdfc:memberStream <inputChannel>;
-                rdfc:ingestConfig [
-                    rdfc:operationMode "Replication";
-                    rdfc:memberBatchSize 100;
-                    rdfc:memberShape "Some SHACL shape";
-                    rdfc:changeSemantics [
-                        rdfc:changeTypePath "http://ex.org/changeProp";
-                        rdfc:createValue "http://ex.org/Create";
-                        rdfc:updateValue "http://ex.org/Update";
-                        rdfc:deleteValue "http://ex.org/Delete"
+            <http://example.com/ns#processor> a rdfcp:SPARQLIngest; 
+                rdfcp:memberStream <inputChannel>;
+                rdfcp:ingestConfig [
+                    rdfcp:operationMode "Replication";
+                    rdfcp:memberBatchSize 100;
+                    rdfcp:memberShape "Some SHACL shape";
+                    rdfcp:changeSemantics [
+                        rdfcp:changeTypePath "http://ex.org/changeProp";
+                        rdfcp:createValue "http://ex.org/Create";
+                        rdfcp:updateValue "http://ex.org/Update";
+                        rdfcp:deleteValue "http://ex.org/Delete"
                     ];
-                    rdfc:targetNamedGraph "http://ex.org/myGraph";
-                    rdfc:transactionConfig [
-                        rdfc:transactionIdPath "http://ex.org/transactionId";
-                        rdfc:transactionEndPath "http://ex.org/transactionEnd"
+                    rdfcp:targetNamedGraph "http://ex.org/myGraph";
+                    rdfcp:transactionConfig [
+                        rdfcp:transactionIdPath "http://ex.org/transactionId";
+                        rdfcp:transactionEndPath "http://ex.org/transactionEnd"
                     ];
-                    rdfc:graphStoreUrl "http://ex.org/myGraphStore";
-                    rdfc:forVirtuoso true;
-                    rdfc:accessToken "someAccessToken";
-                    rdfc:measurePerformance [
-                        rdfc:name "PerformanceTest";
-                        rdfc:outputPath "/some/output/path";
-                        rdfc:failureIsFatal true;
-                        rdfc:queryTimeout 30
+                    rdfcp:graphStoreUrl "http://ex.org/myGraphStore";
+                    rdfcp:forVirtuoso true;
+                    rdfcp:accessToken "someAccessToken";
+                    rdfcp:measurePerformance [
+                        rdfcp:name "PerformanceTest";
+                        rdfcp:outputPath "/some/output/path";
+                        rdfcp:failureIsFatal true;
+                        rdfcp:queryTimeout 30
                     ]
                 ];
-                rdfc:sparqlWriter <outputChannel>.
+                rdfcp:sparqlWriter <outputChannel>.
         `;
 
         const configLocation = process.cwd() + "/processors.ttl";
@@ -81,16 +82,17 @@ describe("Tests for SPARQL ingest processor", async () => {
         expect(proc.config.measurePerformance!.queryTimeout).toBe(30);
     });
 
-    test("rdfc:SPARQLIngest falls back to its default values", async () => {
+    test("rdfcp:SPARQLIngest falls back to its default values", async () => {
         const processor = `
             @prefix rdfc: <https://w3id.org/rdf-connect#>.
+            @prefix rdfcp: <https://w3id.org/rdf-connect/processors#>.
 
-            <http://example.com/ns#processor> a rdfc:SPARQLIngest;
-                rdfc:memberStream <inputChannel>;
-                rdfc:ingestConfig [
-                    rdfc:measurePerformance [
-                        rdfc:name "PerformanceTest";
-                        rdfc:outputPath "/some/output/path"
+            <http://example.com/ns#processor> a rdfcp:SPARQLIngest;
+                rdfcp:memberStream <inputChannel>;
+                rdfcp:ingestConfig [
+                    rdfcp:measurePerformance [
+                        rdfcp:name "PerformanceTest";
+                        rdfcp:outputPath "/some/output/path"
                     ]
                 ].
         `;
@@ -115,17 +117,18 @@ describe("Tests for SPARQL ingest processor", async () => {
     test("URLs and the output path can be written as IRIs", async () => {
         const processor = `
             @prefix rdfc: <https://w3id.org/rdf-connect#>.
+            @prefix rdfcp: <https://w3id.org/rdf-connect/processors#>.
 
-            <http://example.com/ns#processor> a rdfc:SPARQLIngest;
-                rdfc:memberStream <inputChannel>;
-                rdfc:ingestConfig [
-                    rdfc:graphStoreUrl <http://ex.org/myGraphStore>;
-                    rdfc:measurePerformance [
-                        rdfc:name "PerformanceTest";
-                        rdfc:outputPath <./tests/perf-out>
+            <http://example.com/ns#processor> a rdfcp:SPARQLIngest;
+                rdfcp:memberStream <inputChannel>;
+                rdfcp:ingestConfig [
+                    rdfcp:graphStoreUrl <http://ex.org/myGraphStore>;
+                    rdfcp:measurePerformance [
+                        rdfcp:name "PerformanceTest";
+                        rdfcp:outputPath <./tests/perf-out>
                     ]
                 ];
-                rdfc:sparqlWriter <outputChannel>.
+                rdfcp:sparqlWriter <outputChannel>.
         `;
 
         const procHelper = new ProcHelper<FullProc<SPARQLIngest>>();

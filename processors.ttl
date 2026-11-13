@@ -1,9 +1,10 @@
 @prefix rdfc: <https://w3id.org/rdf-connect#>.
+@prefix rdfcp: <https://w3id.org/rdf-connect/processors#>.
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>.
 @prefix sh: <http://www.w3.org/ns/shacl#>.
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#>.
 
-rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
+rdfcp:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
   rdfs:label "SPARQL Ingest Processor";
   rdfs:comment "A processor that ingests RDF data into a SPARQL endpoint";
   rdfc:file <./lib/SPARQLIngest.js>;
@@ -11,9 +12,9 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
   rdfc:entrypoint <./>.
 
 [ ] a sh:NodeShape;
-  sh:targetClass rdfc:SPARQLIngest;
+  sh:targetClass rdfcp:SPARQLIngest;
   sh:property [
-    sh:path rdfc:memberStream;
+    sh:path rdfcp:memberStream;
     sh:codeIdentifier "memberStream";
     sh:name "Input channel";
     sh:description "Input channel with the SDS records, or the quads, to ingest.";
@@ -21,15 +22,15 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:minCount 1;
     sh:maxCount 1;
   ], [
-    sh:path rdfc:ingestConfig;
+    sh:path rdfcp:ingestConfig;
     sh:codeIdentifier "config";
     sh:name "Ingest configuration";
     sh:description "Configuration of how the records are ingested.";
-    sh:class rdfc:IngestConfig;
+    sh:class rdfcp:IngestConfig;
     sh:minCount 1;
     sh:maxCount 1;
   ], [
-    sh:path rdfc:sparqlWriter;
+    sh:path rdfcp:sparqlWriter;
     sh:codeIdentifier "sparqlWriter";
     sh:name "Output channel";
     sh:description "Output channel that receives the generated SPARQL queries.";
@@ -38,9 +39,9 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
   ].
 
 [ ] a sh:NodeShape;
-  sh:targetClass rdfc:IngestConfig;
+  sh:targetClass rdfcp:IngestConfig;
   sh:property [
-    sh:path rdfc:operationMode;
+    sh:path rdfcp:operationMode;
     sh:datatype xsd:string;
     sh:codeIdentifier "operationMode";
     sh:name "Operation mode";
@@ -48,7 +49,7 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:defaultValue "Sync";
     sh:maxCount 1;
   ], [
-    sh:path rdfc:memberBatchSize;
+    sh:path rdfcp:memberBatchSize;
     sh:datatype xsd:integer;
     sh:codeIdentifier "memberBatchSize";
     sh:name "Member batch size";
@@ -56,22 +57,22 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:defaultValue 100;
     sh:maxCount 1;
   ], [
-    sh:path rdfc:memberShape;
+    sh:path rdfcp:memberShape;
     sh:datatype xsd:string;
     sh:codeIdentifier "memberShape";
     sh:name "Member shape";
     sh:description "SHACL shape, as Turtle, used to build the queries when records are incomplete.";
     sh:maxCount 1;
   ], [
-    sh:path rdfc:changeSemantics;
-    sh:class rdfc:ChangeSemantics;
+    sh:path rdfcp:changeSemantics;
+    sh:class rdfcp:ChangeSemantics;
     sh:codeIdentifier "changeSemantics";
     sh:name "Change semantics";
     sh:description "How the change type of a record maps to create, update and delete operations.";
     sh:maxCount 1;
     sh:minCount 0;
   ], [
-    sh:path rdfc:targetNamedGraph;
+    sh:path rdfcp:targetNamedGraph;
     sh:datatype xsd:string;
     sh:codeIdentifier "targetNamedGraph";
     sh:name "Target named graph";
@@ -79,15 +80,15 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:maxCount 1;
     sh:minCount 0;
   ], [
-    sh:path rdfc:transactionConfig;
-    sh:class rdfc:TransactionConfig;
+    sh:path rdfcp:transactionConfig;
+    sh:class rdfcp:TransactionConfig;
     sh:codeIdentifier "transactionConfig";
     sh:name "Transaction configuration";
     sh:description "Groups records by transaction ID, so they are applied together.";
     sh:maxCount 1;
     sh:minCount 0;
   ], [
-    sh:path rdfc:graphStoreUrl;
+    sh:path rdfcp:graphStoreUrl;
     sh:nodeKind sh:IRIOrLiteral;
     sh:codeType xsd:string;
     sh:codeIdentifier "graphStoreUrl";
@@ -96,7 +97,7 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:maxCount 1;
     sh:minCount 0;
   ], [
-    sh:path rdfc:forVirtuoso;
+    sh:path rdfcp:forVirtuoso;
     sh:datatype xsd:boolean;
     sh:codeIdentifier "forVirtuoso";
     sh:name "For Virtuoso";
@@ -105,7 +106,7 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:maxCount 1;
     sh:minCount 0;
   ], [
-    sh:path rdfc:accessToken;
+    sh:path rdfcp:accessToken;
     sh:datatype xsd:string;
     sh:codeIdentifier "accessToken";
     sh:name "Access token";
@@ -113,8 +114,8 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:maxCount 1;
     sh:minCount 0;
   ], [
-    sh:path rdfc:measurePerformance;
-    sh:class rdfc:PerformanceConfig;
+    sh:path rdfcp:measurePerformance;
+    sh:class rdfcp:PerformanceConfig;
     sh:codeIdentifier "measurePerformance";
     sh:name "Performance measurement";
     sh:description "Measures the performance of the SPARQL queries.";
@@ -123,9 +124,9 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
   ].
 
 [ ] a sh:NodeShape;
-  sh:targetClass rdfc:PerformanceConfig;
+  sh:targetClass rdfcp:PerformanceConfig;
   sh:property [
-    sh:path rdfc:name;
+    sh:path rdfcp:name;
     sh:datatype xsd:string;
     sh:codeIdentifier "name";
     sh:name "Name";
@@ -133,7 +134,7 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:maxCount 1;
     sh:minCount 1;
   ], [
-    sh:path rdfc:outputPath;
+    sh:path rdfcp:outputPath;
     sh:nodeKind sh:IRIOrLiteral;
     sh:codeType xsd:string;
     sh:codeIdentifier "outputPath";
@@ -142,7 +143,7 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:maxCount 1;
     sh:minCount 1;
   ], [
-    sh:path rdfc:failureIsFatal;
+    sh:path rdfcp:failureIsFatal;
     sh:datatype xsd:boolean;
     sh:codeIdentifier "failureIsFatal";
     sh:name "Failure is fatal";
@@ -151,7 +152,7 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:maxCount 1;
     sh:minCount 0;
   ], [
-    sh:path rdfc:queryTimeout;
+    sh:path rdfcp:queryTimeout;
     sh:datatype xsd:integer;
     sh:codeIdentifier "queryTimeout";
     sh:name "Query timeout";
@@ -162,9 +163,9 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
   ].
 
 [ ] a sh:NodeShape;
-  sh:targetClass rdfc:ChangeSemantics;
+  sh:targetClass rdfcp:ChangeSemantics;
   sh:property [
-    sh:path rdfc:changeTypePath;
+    sh:path rdfcp:changeTypePath;
     sh:datatype xsd:string;
     sh:codeIdentifier "changeTypePath";
     sh:name "Change type path";
@@ -172,7 +173,7 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:maxCount 1;
     sh:minCount 1;
   ], [
-    sh:path rdfc:createValue;
+    sh:path rdfcp:createValue;
     sh:datatype xsd:string;
     sh:codeIdentifier "createValue";
     sh:name "Create value";
@@ -180,7 +181,7 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:maxCount 1;
     sh:minCount 1;
   ], [
-    sh:path rdfc:updateValue;
+    sh:path rdfcp:updateValue;
     sh:datatype xsd:string;
     sh:codeIdentifier "updateValue";
     sh:name "Update value";
@@ -188,7 +189,7 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:maxCount 1;
     sh:minCount 1;
   ], [
-    sh:path rdfc:deleteValue;
+    sh:path rdfcp:deleteValue;
     sh:datatype xsd:string;
     sh:codeIdentifier "deleteValue";
     sh:name "Delete value";
@@ -198,9 +199,9 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
   ].
 
 [ ] a sh:NodeShape;
-  sh:targetClass rdfc:TransactionConfig;
+  sh:targetClass rdfcp:TransactionConfig;
   sh:property [
-    sh:path rdfc:transactionIdPath;
+    sh:path rdfcp:transactionIdPath;
     sh:datatype xsd:string;
     sh:codeIdentifier "transactionIdPath";
     sh:name "Transaction ID path";
@@ -208,7 +209,7 @@ rdfc:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:maxCount 1;
     sh:minCount 1;
   ], [
-    sh:path rdfc:transactionEndPath;
+    sh:path rdfcp:transactionEndPath;
     sh:datatype xsd:string;
     sh:codeIdentifier "transactionEndPath";
     sh:name "Transaction end path";
