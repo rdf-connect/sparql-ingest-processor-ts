@@ -45,7 +45,7 @@ npm install @rdfc/sparql-ingest-processor-ts
 
 ### Define and configure the processor
 <ingester> a rdfcp:SPARQLIngest;
-    rdfcp:memberStream <in>;
+    rdfcp:input <in>;
     rdfcp:ingestConfig [
         rdfcp:operationMode "Replication";
         rdfcp:memberBatchSize 500;
@@ -71,7 +71,7 @@ npm install @rdfc/sparql-ingest-processor-ts
             rdfcp:queryTimeout 1800
         ]
     ];
-    rdfcp:sparqlWriter <out>.
+    rdfcp:output <out>.
 ```
 
 ---
@@ -79,9 +79,9 @@ npm install @rdfc/sparql-ingest-processor-ts
 ## Configuration
 
 ### Parameters of `rdfcp:SPARQLIngest`:
-- `rdfcp:memberStream` (**rdfc:Reader**, required): Input SDS record stream.
+- `rdfcp:input` (**rdfc:Reader**, required): Input SDS record stream.
 - `rdfcp:ingestConfig` (**rdfcp:IngestConfig**, required): Configuration for ingest behavior.
-- `rdfcp:sparqlWriter` (**rdfc:Writer**, optional): Output stream of generated SPARQL queries.
+- `rdfcp:output` (**rdfc:Writer**, optional): Output stream of generated SPARQL queries.
 
 ---
 
@@ -125,12 +125,12 @@ npm install @rdfc/sparql-ingest-processor-ts
 
 ```turtle
 <ingester> a rdfcp:SPARQLIngest;
-    rdfcp:memberStream <in>;
+    rdfcp:input <in>;
     rdfcp:ingestConfig [
         rdfcp:targetNamedGraph "http://example.org/targetGraph";
         rdfcp:graphStoreUrl "http://example.org/sparql"
     ];
-    rdfcp:sparqlWriter <out>.
+    rdfcp:output <out>.
 ```
 
 ---
