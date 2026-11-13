@@ -90,7 +90,7 @@ npm install @rdfc/sparql-ingest-processor-ts
 - `rdfcp:memberBatchSize` (**integer**, optional): Number of input records to batch together for ingestion when running in `Replication` mode. Default: `100`.
 - `rdfcp:memberShape` (**string**, optional): SHACL shape used to guide query construction when payloads are incomplete.
 - `rdfcp:changeSemantics` (**rdfcp:ChangeSemantics**, optional): Configures mapping between change types (create/update/delete) and SPARQL operations.
-- `rdfcp:targetNamedGraph` (**string**, optional): Force all operations into a specific named graph.
+- `rdfcp:targetNamedGraph` (**string** or IRI, optional): Force all operations into a specific named graph.
 - `rdfcp:transactionConfig` (**rdfcp:TransactionConfig**, optional): Groups records by transaction ID for atomic updates.
 - `rdfcp:graphStoreUrl` (**string** or IRI, optional): SPARQL Graph Store endpoint URL.
 - `rdfcp:forVirtuoso` (**boolean**, optional): Enables Virtuoso-specific handling to avoid query size limits. Default: `false`.
@@ -100,16 +100,16 @@ npm install @rdfc/sparql-ingest-processor-ts
 ---
 
 ### Parameters of `rdfcp:ChangeSemantics`:
-- `rdfcp:changeTypePath` (**string**, required): Predicate identifying the type of change in SDS records.
-- `rdfcp:createValue` (**string**, required): Value representing a create operation.
-- `rdfcp:updateValue` (**string**, required): Value representing an update operation.
-- `rdfcp:deleteValue` (**string**, required): Value representing a delete operation.
+- `rdfcp:changeTypePath` (**string** or IRI, required): Predicate identifying the type of change in SDS records.
+- `rdfcp:createValue` (**string** or IRI, required): Value representing a create operation.
+- `rdfcp:updateValue` (**string** or IRI, required): Value representing an update operation.
+- `rdfcp:deleteValue` (**string** or IRI, required): Value representing a delete operation.
 
 ---
 
 ### Parameters of `rdfcp:TransactionConfig`:
-- `rdfcp:transactionIdPath` (**string**, required): Predicate identifying the transaction ID.
-- `rdfcp:transactionEndPath` (**string**, required): Predicate marking the last record in a transaction.
+- `rdfcp:transactionIdPath` (**string** or IRI, required): Predicate identifying the transaction ID.
+- `rdfcp:transactionEndPath` (**string** or IRI, required): Predicate marking the last record in a transaction.
 
 ---
 
