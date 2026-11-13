@@ -27,6 +27,7 @@
         "url": "git+https://github.com/rdf-connect/sparql-ingest-processor-ts.git"
     },
     "dependencies": {
+        "@rdfc/utils-js": "^1.0.1",
         "@treecg/types": "^0.4.6",
         "n3": "^1.26.0",
         "rdf-data-factory": "^2.1.0",
