@@ -26,7 +26,7 @@ rdfcp:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:codeIdentifier "config";
     sh:name "Ingest configuration";
     sh:description "Configuration of how the records are ingested.";
-    sh:class rdfcp:IngestConfig;
+    sh:node rdfcp:IngestConfigShape;
     sh:minCount 1;
     sh:maxCount 1;
   ], [
@@ -38,8 +38,7 @@ rdfcp:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:maxCount 1;
   ].
 
-[ ] a sh:NodeShape;
-  sh:targetClass rdfcp:IngestConfig;
+rdfcp:IngestConfigShape a sh:NodeShape;
   sh:property [
     sh:path rdfcp:operationMode;
     sh:datatype xsd:string;
@@ -65,7 +64,7 @@ rdfcp:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:maxCount 1;
   ], [
     sh:path rdfcp:changeSemantics;
-    sh:class rdfcp:ChangeSemantics;
+    sh:node rdfcp:ChangeSemanticsShape;
     sh:codeIdentifier "changeSemantics";
     sh:name "Change semantics";
     sh:description "How the change type of a record maps to create, update and delete operations.";
@@ -82,7 +81,7 @@ rdfcp:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:minCount 0;
   ], [
     sh:path rdfcp:transactionConfig;
-    sh:class rdfcp:TransactionConfig;
+    sh:node rdfcp:TransactionConfigShape;
     sh:codeIdentifier "transactionConfig";
     sh:name "Transaction configuration";
     sh:description "Groups records by transaction ID, so they are applied together.";
@@ -116,7 +115,7 @@ rdfcp:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:minCount 0;
   ], [
     sh:path rdfcp:measurePerformance;
-    sh:class rdfcp:PerformanceConfig;
+    sh:node rdfcp:PerformanceConfigShape;
     sh:codeIdentifier "measurePerformance";
     sh:name "Performance measurement";
     sh:description "Measures the performance of the SPARQL queries.";
@@ -124,8 +123,7 @@ rdfcp:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:minCount 0;
   ].
 
-[ ] a sh:NodeShape;
-  sh:targetClass rdfcp:PerformanceConfig;
+rdfcp:PerformanceConfigShape a sh:NodeShape;
   sh:property [
     sh:path rdfcp:name;
     sh:datatype xsd:string;
@@ -163,8 +161,7 @@ rdfcp:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:minCount 0;
   ].
 
-[ ] a sh:NodeShape;
-  sh:targetClass rdfcp:ChangeSemantics;
+rdfcp:ChangeSemanticsShape a sh:NodeShape;
   sh:property [
     sh:path rdfcp:changeTypePath;
     sh:nodeKind sh:IRIOrLiteral;
@@ -203,8 +200,7 @@ rdfcp:SPARQLIngest rdfc:jsImplementationOf rdfc:Processor;
     sh:minCount 1;
   ].
 
-[ ] a sh:NodeShape;
-  sh:targetClass rdfcp:TransactionConfig;
+rdfcp:TransactionConfigShape a sh:NodeShape;
   sh:property [
     sh:path rdfcp:transactionIdPath;
     sh:nodeKind sh:IRIOrLiteral;

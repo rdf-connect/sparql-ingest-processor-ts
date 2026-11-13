@@ -80,26 +80,26 @@ npm install @rdfc/sparql-ingest-processor-ts
 
 ### Parameters of `rdfcp:SPARQLIngest`:
 - `rdfcp:input` (**rdfc:Reader**, required): Input SDS record stream.
-- `rdfcp:ingestConfig` (**rdfcp:IngestConfig**, required): Configuration for ingest behavior.
+- `rdfcp:ingestConfig` (**rdfcp:IngestConfigShape**, required): Configuration for ingest behavior.
 - `rdfcp:output` (**rdfc:Writer**, optional): Output stream of generated SPARQL queries.
 
 ---
 
-### Parameters of `rdfcp:IngestConfig`:
+### Parameters of `rdfcp:IngestConfigShape`:
 - `rdfcp:operationMode` (**string**, optional): Operation mode of the processor. Can be `Replication` or `Sync`. `Replication` mode uses the [SPARQL Graph Store Protocol](https://www.w3.org/TR/sparql11-http-rdf-update/) to ingest data directly into a triple store, which assumes that all received data is meant to be added. `Sync` mode uses the [SPARQL UPDATE specification](https://www.w3.org/TR/sparql11-update/) to ingest data via SPARQL queries, which allows for all CRUD operations. Default: `Sync`.
 - `rdfcp:memberBatchSize` (**integer**, optional): Number of input records to batch together for ingestion when running in `Replication` mode. Default: `100`.
 - `rdfcp:memberShape` (**string**, optional): SHACL shape used to guide query construction when payloads are incomplete.
-- `rdfcp:changeSemantics` (**rdfcp:ChangeSemantics**, optional): Configures mapping between change types (create/update/delete) and SPARQL operations.
+- `rdfcp:changeSemantics` (**rdfcp:ChangeSemanticsShape**, optional): Configures mapping between change types (create/update/delete) and SPARQL operations.
 - `rdfcp:targetNamedGraph` (**string** or IRI, optional): Force all operations into a specific named graph.
-- `rdfcp:transactionConfig` (**rdfcp:TransactionConfig**, optional): Groups records by transaction ID for atomic updates.
+- `rdfcp:transactionConfig` (**rdfcp:TransactionConfigShape**, optional): Groups records by transaction ID for atomic updates.
 - `rdfcp:graphStoreUrl` (**string** or IRI, optional): SPARQL Graph Store endpoint URL.
 - `rdfcp:forVirtuoso` (**boolean**, optional): Enables Virtuoso-specific handling to avoid query size limits. Default: `false`.
 - `rdfcp:accessToken` (**string**, optional): Access token for authenticated graph stores.
-- `rdfcp:measurePerformance` (**rdfcp:PerformanceConfig**, optional): Enables performance measurement of SPARQL queries.
+- `rdfcp:measurePerformance` (**rdfcp:PerformanceConfigShape**, optional): Enables performance measurement of SPARQL queries.
 
 ---
 
-### Parameters of `rdfcp:ChangeSemantics`:
+### Parameters of `rdfcp:ChangeSemanticsShape`:
 - `rdfcp:changeTypePath` (**string** or IRI, required): Predicate identifying the type of change in SDS records.
 - `rdfcp:createValue` (**string** or IRI, required): Value representing a create operation.
 - `rdfcp:updateValue` (**string** or IRI, required): Value representing an update operation.
@@ -107,13 +107,13 @@ npm install @rdfc/sparql-ingest-processor-ts
 
 ---
 
-### Parameters of `rdfcp:TransactionConfig`:
+### Parameters of `rdfcp:TransactionConfigShape`:
 - `rdfcp:transactionIdPath` (**string** or IRI, required): Predicate identifying the transaction ID.
 - `rdfcp:transactionEndPath` (**string** or IRI, required): Predicate marking the last record in a transaction.
 
 ---
 
-### Parameters of `rdfcp:PerformanceConfig`:
+### Parameters of `rdfcp:PerformanceConfigShape`:
 - `rdfcp:name` (**string**, required): Name of the performance measurement run.
 - `rdfcp:outputPath` (**string** or IRI, required): Existing folder where the performance log is written, as `<rdfcp:name>.json`.
 - `rdfcp:failureIsFatal` (**boolean**, optional): If true, aborts on performance measurement failure. Default: `false`.
