@@ -40,7 +40,7 @@
         "@rdfc/js-runner": "^3.4.2",
         "@rdfjs/types": "^2.0.1",
         "@types/n3": "^1.26.6",
-        "@types/node": "^25.9.12",
+        "@types/node": "^26.6.11",
         "@typescript-eslint/eslint-plugin": "^8.74.0",
         "@typescript-eslint/parser": "^8.74.0",
         "@vitest/coverage-v8": "^5.1.2",
