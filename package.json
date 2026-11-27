@@ -40,19 +40,19 @@
         "@rdfc/js-runner": "^3.4.2",
         "@rdfjs/types": "^2.0.1",
         "@types/n3": "^1.26.6",
-        "@types/node": "^25.9.10",
+        "@types/node": "^25.9.12",
         "@typescript-eslint/eslint-plugin": "^8.74.0",
         "@typescript-eslint/parser": "^8.74.0",
-        "@vitest/coverage-v8": "^5.1.1",
+        "@vitest/coverage-v8": "^5.1.2",
         "eslint": "^9.39.3",
         "eslint-config-prettier": "^10.1.8",
         "fastify": "^5.12.8",
         "husky": "^9.1.7",
         "ts-patch": "^3.3.0",
-        "tsc-alias": "^1.9.10",
+        "tsc-alias": "^1.9.11",
         "typescript": "^5.9.3",
         "vite": "^8.3.8",
         "vite-tsconfig-paths": "^6.1.1",
-        "vitest": "^5.1.1"
+        "vitest": "^5.1.2"
     }
 }
